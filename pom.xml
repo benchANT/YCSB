@@ -177,6 +177,7 @@ LICENSE file.
     <module>googlebigtable</module>
     <module>googledatastore</module>
     <module>griddb</module>
+    <module>harperdb</module>
     <module>hbase1</module>
     <module>hbase2</module>
     <module>ignite</module>
