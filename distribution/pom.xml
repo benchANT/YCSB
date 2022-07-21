@@ -136,6 +136,11 @@ LICENSE file.
     </dependency>
     <dependency>
       <groupId>site.ycsb</groupId>
+      <artifactId>harperdb-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>site.ycsb</groupId>
       <artifactId>hbase1-binding</artifactId>
       <version>${project.version}</version>
     </dependency>
