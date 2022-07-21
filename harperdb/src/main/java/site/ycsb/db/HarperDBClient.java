@@ -24,27 +24,24 @@ public class HarperDBClient extends DB {
   public static final String PORT_PROPERTY = "port";
   public static final String PORT_PROPERTY_DEFAULT = "9925";
 
-  private static JSONObject tokenObject;
   private static final OkHttpClient CLIENT = new OkHttpClient().newBuilder().build();
   private static final MediaType MEDIA_TYPE = MediaType.parse("application/json");
+  private static boolean debug = false;
+
+  // TODO Change to support multiple tokens
+  private static JSONObject tokenObject;
+  // TODO Change to List of URLs
   private static String url;
-  /**
-   * Count the number of times initialized to teardown on the last
-   * {@link #cleanup()}.
-   */
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
 
   @Override
   public void init() throws DBException {
-
-    // Keep track of number of calls to init (for later cleanup)
-    INIT_COUNT.incrementAndGet();
-
     // Synchronized so that we only have a single
     // cluster/session instance for all the threads.
-    synchronized (INIT_COUNT) {
+    synchronized (USERNAME_PROPERTY) {
       Properties properties = getProperties();
 
+      // TODO Change to support multiple URLs
       url = properties.getProperty("harperdb.url", null);
       String port = getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
       if (url == null) {
@@ -55,8 +52,8 @@ public class HarperDBClient extends DB {
 
       String username = getProperties().getProperty(USERNAME_PROPERTY);
       String password = getProperties().getProperty(PASSWORD_PROPERTY);
-
       String tablename = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
+      debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
 
       if (username == null) {
         username = "HDB_ADMIN";
@@ -75,6 +72,7 @@ public class HarperDBClient extends DB {
           "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
           " \"password\": \"" + password + "\"\n}");
 
+      // TODO Generate a token for every instance in the cluster
       Request tokenRequest = new Request.Builder()
           .url(url)
           .method("POST", tokenBody)
@@ -109,8 +107,10 @@ public class HarperDBClient extends DB {
 
     try (Response response = CLIENT.newCall(request).execute()) {
       if (response.isSuccessful()) {
-        JSONArray jsonArray = new JSONArray(Objects.requireNonNull(response.body()).string());
-        fillMap(result, jsonArray);
+        if (debug) {
+          JSONArray jsonArray = new JSONArray(Objects.requireNonNull(response.body()).string());
+          fillMap(result, jsonArray);
+        }
         return Status.OK;
       } else {
         return Status.ERROR;
@@ -121,16 +121,20 @@ public class HarperDBClient extends DB {
     }
   }
 
+
+  /* TODO find an alternative to between, as the startkey and endkey are strings e.g "user123"
+   * sometimes fails, e.g. for "user8", "user11" in search_value, this might be related to this
+   */
   @Override
   public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String,
       ByteIterator>> result) {
 
     String attributes = attributesBuilder(fields);
-    String regex = "([a-zA-Z]{1,})([0-9]{1,})";
+    String regex = "([a-zA-Z]+)([0-9]+)";
     Matcher matcher = Pattern.compile(regex).matcher(startkey);
     String endkey = "";
     if (matcher.find()) {
-      endkey = matcher.group(1) + (Integer.parseInt(matcher.group(2)) + recordcount);
+      endkey = matcher.group(1) + (Integer.parseInt(matcher.group(2)) + recordcount - 1);
     }
     String condition = "\"search_attribute\": \"id\",\n\"search_type\": \"between\",\n\"search_value\": [\n \""
         + startkey + "\",\n\"" + endkey + "\"\n ]\n}\n]\n";
@@ -142,13 +146,13 @@ public class HarperDBClient extends DB {
 
     try (Response response = CLIENT.newCall(request).execute()) {
       if (response.isSuccessful()) {
-        JSONArray jsonArray = new JSONArray(Objects.requireNonNull(response.body()).string());
-//        System.out.println("response length: " + jsonArray.length() + " recordcount: " + recordcount
-//            + " start: " + startkey);
-        for (int i = 0; i < jsonArray.length(); i++) {
-          HashMap<String, ByteIterator> resultMap = new HashMap<String, ByteIterator>();
-          fillMap(resultMap, jsonArray);
-          result.add(resultMap);
+        if (debug) {
+          JSONArray jsonArray = new JSONArray(Objects.requireNonNull(response.body()).string());
+          for (int i = 0; i < jsonArray.length(); i++) {
+            HashMap<String, ByteIterator> resultMap = new HashMap<String, ByteIterator>();
+            fillMap(resultMap, jsonArray);
+            result.add(resultMap);
+          }
         }
         return Status.OK;
       } else {
@@ -162,22 +166,7 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
-    StringBuilder records = new StringBuilder("[\n  {\n   \"id\":" + "\"" + key + "\"" + ",\n");
-
-    int i = 0;
-    for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-      i++;
-      String value = entry.getValue().toString();
-      // Escape backslash and double quotation marks to get valid json
-      value = value.replaceAll("\\\\", "\\\\\\\\");
-      value = value.replaceAll("\"", "\\\\\"");
-      if (i < values.size()) {
-        records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\",\n");
-      } else {
-        records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\"\n");
-      }
-    }
-    records.append("    }\n]\n");
+    String records = recordsBuilder(key, values);
 
     RequestBody updateBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"update\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
@@ -198,31 +187,13 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
-
-    StringBuilder records = new StringBuilder("[\n  {\n   \"id\":" + "\"" + key + "\"" + ",\n");
-
-    int i = 0;
-    for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-      i++;
-      String value = entry.getValue().toString();
-      // Escape backslash and double quotation marks to get valid json
-      value = value.replaceAll("\\\\", "\\\\\\\\");
-      value = value.replaceAll("\"", "\\\\\"");
-      if (i < values.size()) {
-        records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\",\n");
-      } else {
-        records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\"\n");
-      }
-    }
-    records.append("    }\n]\n");
-
+    String records = recordsBuilder(key, values);
     RequestBody insertBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"insert\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
         "\"records\": " + records + "}");
     Request request = requestBuilder(insertBody);
 
     try (Response response = CLIENT.newCall(request).execute()) {
-//      System.out.println(response.body().string());
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
@@ -243,7 +214,6 @@ public class HarperDBClient extends DB {
     Request request = requestBuilder(deleteBody);
 
     try (Response response = CLIENT.newCall(request).execute()) {
-      System.out.println("response: " + response.body().string());
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
@@ -259,9 +229,31 @@ public class HarperDBClient extends DB {
     for (Object o : jsonArray) {
       JSONObject jsonLineItem = (JSONObject) o;
       for (String key : jsonLineItem.keySet()) {
-        resultMap.put(key, new StringByteIterator(jsonLineItem.get(key).toString()));
+        if (key.equals("id") || key.contains("field")) {
+          resultMap.put(key, new StringByteIterator(jsonLineItem.get(key).toString()));
+          System.out.println("Key: " + key + " Value: " + jsonLineItem.get(key).toString());
+        }
       }
     }
+  }
+
+  private String recordsBuilder(String key, Map<String, ByteIterator> values) {
+    StringBuilder records = new StringBuilder("[\n  {\n   \"id\":" + "\"" + key + "\"" + ",\n");
+    int i = 0;
+    for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
+      i++;
+      String value = entry.getValue().toString();
+      // Escape backslash and double quotation marks to get valid json
+      value = value.replaceAll("\\\\", "\\\\\\\\");
+      value = value.replaceAll("\"", "\\\\\"");
+      if (i < values.size()) {
+        records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\",\n");
+      } else {
+        records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\"\n");
+      }
+    }
+    records.append("    }\n]\n");
+    return records.toString();
   }
 
   private String attributesBuilder(Set<String> fields) {
@@ -282,6 +274,7 @@ public class HarperDBClient extends DB {
     return attributes.toString();
   }
 
+  // TODO Add scheduling in case of multiple URLs
   private Request requestBuilder(RequestBody body) {
     return new Request.Builder()
         .url(url)
@@ -292,4 +285,5 @@ public class HarperDBClient extends DB {
   }
 
 }
+
 
