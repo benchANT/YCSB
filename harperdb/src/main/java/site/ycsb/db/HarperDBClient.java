@@ -32,55 +32,54 @@ public class HarperDBClient extends DB {
   private static JSONObject tokenObject;
   // TODO Change to List of URLs
   private static String url;
+
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
 
   @Override
   public void init() throws DBException {
-    // Synchronized so that we only have a single
-    // cluster/session instance for all the threads.
-    synchronized (USERNAME_PROPERTY) {
-      Properties properties = getProperties();
+    Properties properties = getProperties();
+    // TODO Change to support multiple URLs
+    url = properties.getProperty("harperdb.url", null);
+    String port = getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
+    if (url == null) {
+      url = "http://localhost:" + port;
+    } else {
+      url += ":" + port;
+    }
 
-      // TODO Change to support multiple URLs
-      url = properties.getProperty("harperdb.url", null);
-      String port = getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
-      if (url == null) {
-        url = "http://localhost:" + port;
-      } else {
-        url += ":" + port;
-      }
+    String username = getProperties().getProperty(USERNAME_PROPERTY);
+    String password = getProperties().getProperty(PASSWORD_PROPERTY);
+    String tablename = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
+    debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
 
-      String username = getProperties().getProperty(USERNAME_PROPERTY);
-      String password = getProperties().getProperty(PASSWORD_PROPERTY);
-      String tablename = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
-      debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
+    if (username == null) {
+      username = "HDB_ADMIN";
+    }
+    if (password == null) {
+      password = "password";
+    }
 
-      if (username == null) {
-        username = "HDB_ADMIN";
-      }
-      if (password == null) {
-        password = "password";
-      }
+    RequestBody tokenBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
+        "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
+        " \"password\": \"" + password + "\"\n}");
 
-      RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
-          "    \"schema\": \"dev\"\n}");
+    // TODO Generate a token for every instance in the cluster
+    Request tokenRequest = new Request.Builder()
+        .url(url)
+        .method("POST", tokenBody)
+        .addHeader("Content-Type", "application/json")
+        .build();
 
-      RequestBody createTableBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_table\",\n" +
-          "    \"schema\": \"dev\",\n   \"table\": \"" + tablename + "\",\n    \"hash_attribute\": \"id\"\n}");
+    try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
+      tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
+      // only the first thread should create the schema and table
+      if (INIT_COUNT.incrementAndGet() == 1) {
+        RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
+            "    \"schema\": \"dev\"\n}");
 
-      RequestBody tokenBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-          "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
-          " \"password\": \"" + password + "\"\n}");
+        RequestBody createTableBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_table\",\n" +
+            "    \"schema\": \"dev\",\n   \"table\": \"" + tablename + "\",\n    \"hash_attribute\": \"id\"\n}");
 
-      // TODO Generate a token for every instance in the cluster
-      Request tokenRequest = new Request.Builder()
-          .url(url)
-          .method("POST", tokenBody)
-          .addHeader("Content-Type", "application/json")
-          .build();
-
-      try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
-        tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
         Request request = requestBuilder(body);
         CLIENT.newCall(request).execute().close();
 
@@ -88,13 +87,16 @@ public class HarperDBClient extends DB {
         Response response = CLIENT.newCall(request).execute();
         if (response.isSuccessful()) {
           System.out.println("Successfully created connection with " + url);
+        } else {
+          System.err.println(Objects.requireNonNull(response.body()).string());
         }
         response.close();
-      } catch (IOException e) {
-        e.printStackTrace();
       }
+    } catch (IOException e) {
+      e.printStackTrace();
     }
   }
+
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
@@ -113,6 +115,7 @@ public class HarperDBClient extends DB {
         }
         return Status.OK;
       } else {
+        System.err.println(Objects.requireNonNull(response.body()).string());
         return Status.ERROR;
       }
     } catch (IOException e) {
@@ -156,6 +159,7 @@ public class HarperDBClient extends DB {
         }
         return Status.OK;
       } else {
+        System.err.println(Objects.requireNonNull(response.body()).string());
         return Status.ERROR;
       }
     } catch (IOException e) {
@@ -177,6 +181,7 @@ public class HarperDBClient extends DB {
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
+        System.err.println(Objects.requireNonNull(response.body()).string());
         return Status.ERROR;
       }
     } catch (IOException e) {
@@ -197,6 +202,7 @@ public class HarperDBClient extends DB {
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
+        System.err.println(Objects.requireNonNull(response.body()).string());
         return Status.ERROR;
       }
     } catch (IOException e) {
@@ -217,6 +223,7 @@ public class HarperDBClient extends DB {
       if (response.isSuccessful()) {
         return Status.OK;
       } else {
+        System.err.println(Objects.requireNonNull(response.body()).string());
         return Status.ERROR;
       }
     } catch (IOException e) {
