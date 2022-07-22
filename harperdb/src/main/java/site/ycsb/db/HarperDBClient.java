@@ -33,71 +33,79 @@ public class HarperDBClient extends DB {
   // TODO Change to List of URLs
   private static String url;
 
+
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
+  // Used to ensure that only one schema and table are created
+  private static final AtomicInteger DB_INIT_COUNT = new AtomicInteger(0);
 
   @Override
   public void init() throws DBException {
-    Properties properties = getProperties();
-    // TODO Change to support multiple URLs
-    url = properties.getProperty("harperdb.url", null);
-    String port = getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
-    if (url == null) {
-      url = "http://localhost:" + port;
-    } else {
-      url += ":" + port;
-    }
-
-    String username = getProperties().getProperty(USERNAME_PROPERTY);
-    String password = getProperties().getProperty(PASSWORD_PROPERTY);
-    String tablename = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
-    debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
-
-    if (username == null) {
-      username = "HDB_ADMIN";
-    }
-    if (password == null) {
-      password = "password";
-    }
-
-    RequestBody tokenBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-        "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
-        " \"password\": \"" + password + "\"\n}");
-
-    // TODO Generate a token for every instance in the cluster
-    Request tokenRequest = new Request.Builder()
-        .url(url)
-        .method("POST", tokenBody)
-        .addHeader("Content-Type", "application/json")
-        .build();
-
-    try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
-      if (tokenResponse.isSuccessful()) {
-        tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
-      } else {
-        System.err.println(Objects.requireNonNull(tokenResponse.body()).string());
-      }
-      // only the first thread should create the schema and table
+    synchronized (INIT_COUNT) {
+      Properties properties = getProperties();
+      // TODO Change to support multiple URLs
+      // At the moment only one Thread has to build the url
       if (INIT_COUNT.incrementAndGet() == 1) {
-        RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
-            "    \"schema\": \"dev\"\n}");
-
-        RequestBody createTableBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_table\",\n" +
-            "    \"schema\": \"dev\",\n   \"table\": \"" + tablename + "\",\n    \"hash_attribute\": \"id\"\n}");
-
-        Request request = requestBuilder(body);
-        CLIENT.newCall(request).execute().close();
-
-        request = requestBuilder(createTableBody);
-        Response response = CLIENT.newCall(request).execute();
-        if (response.isSuccessful()) {
-          System.out.println("Successfully created connection with " + url);
+        url = properties.getProperty("harperdb.url", null);
+        String port = getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
+        if (url == null) {
+          url = "http://localhost:" + port;
         } else {
-          System.err.println(Objects.requireNonNull(response.body()).string());
+          url += ":" + port;
         }
-        response.close();
       }
-    } catch (IOException e) {
-      e.printStackTrace();
+      String username = getProperties().getProperty(USERNAME_PROPERTY);
+      String password = getProperties().getProperty(PASSWORD_PROPERTY);
+      String tablename = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
+      debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
+
+      if (username == null) {
+        username = "HDB_ADMIN";
+      }
+      if (password == null) {
+        password = "password";
+      }
+
+      RequestBody tokenBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
+          "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
+          " \"password\": \"" + password + "\"\n}");
+
+      // TODO Generate a token for every instance in the cluster
+      Request tokenRequest = new Request.Builder()
+          .url(url)
+          .method("POST", tokenBody)
+          .addHeader("Content-Type", "application/json")
+          .build();
+
+      try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
+        if (tokenResponse.isSuccessful()) {
+          tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
+        } else {
+          System.err.println(Objects.requireNonNull(tokenResponse.body()).string());
+        }
+        // only the first thread should create the schema and table
+        if (!(DB_INIT_COUNT.get() > 0)) {
+          RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
+              "    \"schema\": \"dev\"\n}");
+
+          RequestBody createTableBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_table\",\n" +
+              "    \"schema\": \"dev\",\n   \"table\": \"" + tablename + "\",\n    \"hash_attribute\": \"id\"\n}");
+
+          Request request = requestBuilder(body);
+          CLIENT.newCall(request).execute().close();
+
+          request = requestBuilder(createTableBody);
+          Response response = CLIENT.newCall(request).execute();
+          if (response.isSuccessful()) {
+            DB_INIT_COUNT.getAndIncrement();
+            System.out.println("Successfully created connection with " + url);
+          } else {
+            System.err.println(Objects.requireNonNull(response.body()).string());
+          }
+          response.close();
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
     }
   }
 
