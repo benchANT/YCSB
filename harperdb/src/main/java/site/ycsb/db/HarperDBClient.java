@@ -71,7 +71,11 @@ public class HarperDBClient extends DB {
         .build();
 
     try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
-      tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
+      if (tokenResponse.isSuccessful()) {
+        tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
+      } else {
+        System.err.println(Objects.requireNonNull(tokenResponse.body()).string());
+      }
       // only the first thread should create the schema and table
       if (INIT_COUNT.incrementAndGet() == 1) {
         RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
@@ -96,7 +100,6 @@ public class HarperDBClient extends DB {
       e.printStackTrace();
     }
   }
-
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
@@ -123,7 +126,6 @@ public class HarperDBClient extends DB {
       return Status.ERROR;
     }
   }
-
 
   /* TODO find an alternative to between, as the startkey and endkey are strings e.g "user123"
    * sometimes fails, e.g. for "user8", "user11" in search_value, this might be related to this
