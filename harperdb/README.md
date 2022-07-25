@@ -6,9 +6,9 @@ Binding for (HarperDB)[https://harperdb.io/] using the (NoSQL operations)[https:
 
 * `harperdb.url` (required): defines the HarperDB endpoint, format `http://IP`, the binding uses the default port `9925`
 
-* harperdb.username (required):  HarperDB user
+* `harperdb.username` (required):  HarperDB user
 
-* harperdb.password (required):  HarperDB password
+* `harperdb.password` (required):  HarperDB password
 
-* harperdb.dbname (required):  the name of the HarperDB schema to use for the YCSB, e.g. `ycsb`
+* `harperdb.dbname` (required):  the name of the HarperDB schema to use for the YCSB, e.g. `ycsb`
 
