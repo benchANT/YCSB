@@ -18,7 +18,7 @@ public class HarperDBClient extends DB {
   public static final String USERNAME_PROPERTY = "harperdb.username";
   public static final String PASSWORD_PROPERTY = "harperdb.password";
   public static final String DBNAME_PROPERTY = "harperdb.dbname";
-  public static final String DBNAME_PROPERTY_DEFAULT = "usertable";
+  public static final String DBNAME_PROPERTY_DEFAULT = "dev";
 
 
   public static final String PORT_PROPERTY = "port";
@@ -32,7 +32,7 @@ public class HarperDBClient extends DB {
   private static JSONObject tokenObject;
   // TODO Change to List of URLs
   private static String url;
-
+  private String dbname;
 
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
   // Used to ensure that only one schema and table are created
@@ -55,7 +55,7 @@ public class HarperDBClient extends DB {
       }
       String username = getProperties().getProperty(USERNAME_PROPERTY);
       String password = getProperties().getProperty(PASSWORD_PROPERTY);
-      String tablename = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
+      dbname = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
       debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
 
       if (username == null) {
@@ -85,10 +85,10 @@ public class HarperDBClient extends DB {
         // only the first thread should create the schema and table
         if (!(DB_INIT_COUNT.get() > 0)) {
           RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
-              "    \"schema\": \"dev\"\n}");
+              "    \"schema\": \"" + dbname + "\"\n}");
 
           RequestBody createTableBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_table\",\n" +
-              "    \"schema\": \"dev\",\n   \"table\": \"" + tablename + "\",\n    \"hash_attribute\": \"id\"\n}");
+              "    \"schema\": \"" + dbname + "\",\n   \"table\": \"usertable\",\n    \"hash_attribute\": \"id\"\n}");
 
           Request request = requestBuilder(body);
           CLIENT.newCall(request).execute().close();
@@ -114,7 +114,7 @@ public class HarperDBClient extends DB {
     String attributes = attributesBuilder(fields);
 
     RequestBody readBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-        "\"search_by_hash\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
+        "\"search_by_hash\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"hash_values\": [\n\"" + key + "\"\n],\n\"get_attributes\": [\n " + attributes + "}");
     Request request = requestBuilder(readBody);
 
@@ -153,7 +153,7 @@ public class HarperDBClient extends DB {
         + startkey + "\",\n\"" + endkey + "\"\n ]\n}\n]\n";
 
     RequestBody scanBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-        "\"search_by_conditions\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
+        "\"search_by_conditions\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"get_attributes\": [\n " + attributes + ",\n \"conditions\": [\n  {\n" + condition + "}");
     Request request = requestBuilder(scanBody);
 
@@ -183,7 +183,7 @@ public class HarperDBClient extends DB {
     String records = recordsBuilder(key, values);
 
     RequestBody updateBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-        "\"update\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
+        "\"update\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"records\": " + records + "}");
     Request request = requestBuilder(updateBody);
 
@@ -204,7 +204,7 @@ public class HarperDBClient extends DB {
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
     String records = recordsBuilder(key, values);
     RequestBody insertBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-        "\"insert\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
+        "\"insert\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"records\": " + records + "}");
     Request request = requestBuilder(insertBody);
 
@@ -225,7 +225,7 @@ public class HarperDBClient extends DB {
   public Status delete(String table, String key) {
 
     RequestBody deleteBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-        "\"delete\",\n    \"schema\": \"dev\",\n \"table\": \"" + table + "\",\n" +
+        "\"delete\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"hash_values\": " + "[\n\"" + key + "\"\n" + "]\n" + "}");
     Request request = requestBuilder(deleteBody);
 
