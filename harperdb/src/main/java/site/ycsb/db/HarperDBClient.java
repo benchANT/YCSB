@@ -7,7 +7,7 @@ import site.ycsb.*;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,62 +28,58 @@ public class HarperDBClient extends DB {
   private static final MediaType MEDIA_TYPE = MediaType.parse("application/json");
   private static boolean debug = false;
 
-  // TODO Change to support multiple tokens
   private static JSONObject tokenObject;
-  // TODO Change to List of URLs
   private static String url;
-  private String dbname;
+  private static String dbname;
+  private static int batchSize;
+  private final List<String> batchInserts = new ArrayList<String>();
 
-  private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
   // Used to ensure that only one schema and table are created
-  private static final AtomicInteger DB_INIT_COUNT = new AtomicInteger(0);
+  private static final AtomicBoolean DB_INIT_COMPLETE = new AtomicBoolean();
 
   @Override
   public void init() throws DBException {
-    synchronized (INIT_COUNT) {
-      Properties properties = getProperties();
-      // TODO Change to support multiple URLs
-      // At the moment only one Thread has to build the url
-      if (INIT_COUNT.incrementAndGet() == 1) {
+    synchronized (DB_INIT_COMPLETE) {
+      if (!DB_INIT_COMPLETE.get()) {
+        Properties properties = getProperties();
+
         url = properties.getProperty("harperdb.url", null);
-        String port = getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
+        String port = properties.getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT);
         if (url == null) {
           url = "http://localhost:" + port;
         } else {
           url += ":" + port;
         }
-      }
-      String username = getProperties().getProperty(USERNAME_PROPERTY);
-      String password = getProperties().getProperty(PASSWORD_PROPERTY);
-      dbname = getProperties().getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
-      debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
 
-      if (username == null) {
-        username = "HDB_ADMIN";
-      }
-      if (password == null) {
-        password = "password";
-      }
+        batchSize = Integer.parseInt(properties.getProperty("batchsize", "1"));
+        String username = properties.getProperty(USERNAME_PROPERTY);
+        String password = properties.getProperty(PASSWORD_PROPERTY);
+        debug = Boolean.parseBoolean(properties.getProperty("debug", "false"));
+        dbname = properties.getProperty(DBNAME_PROPERTY, DBNAME_PROPERTY_DEFAULT);
 
-      RequestBody tokenBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
-          "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
-          " \"password\": \"" + password + "\"\n}");
-
-      // TODO Generate a token for every instance in the cluster
-      Request tokenRequest = new Request.Builder()
-          .url(url)
-          .method("POST", tokenBody)
-          .addHeader("Content-Type", "application/json")
-          .build();
-
-      try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
-        if (tokenResponse.isSuccessful()) {
-          tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
-        } else {
-          System.err.println(Objects.requireNonNull(tokenResponse.body()).string());
+        if (username == null) {
+          username = "HDB_ADMIN";
         }
-        // only the first thread should create the schema and table
-        if (!(DB_INIT_COUNT.get() > 0)) {
+        if (password == null) {
+          password = "password";
+        }
+
+        RequestBody tokenBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
+            "\"create_authentication_tokens\",\n    \"username\": \"" + username + "\",\n" +
+            " \"password\": \"" + password + "\"\n}");
+
+        Request tokenRequest = new Request.Builder()
+            .url(url)
+            .method("POST", tokenBody)
+            .addHeader("Content-Type", "application/json")
+            .build();
+
+        try (Response tokenResponse = CLIENT.newCall(tokenRequest).execute()) {
+          if (tokenResponse.isSuccessful()) {
+            tokenObject = new JSONObject(Objects.requireNonNull(tokenResponse.body()).string());
+          } else {
+            System.err.println(Objects.requireNonNull(tokenResponse.body()).string());
+          }
           RequestBody body = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": \"create_schema\",\n" +
               "    \"schema\": \"" + dbname + "\"\n}");
 
@@ -96,15 +92,15 @@ public class HarperDBClient extends DB {
           request = requestBuilder(createTableBody);
           Response response = CLIENT.newCall(request).execute();
           if (response.isSuccessful()) {
-            DB_INIT_COUNT.getAndIncrement();
+            DB_INIT_COMPLETE.set(true);
             System.out.println("Successfully created connection with " + url);
           } else {
             System.err.println(Objects.requireNonNull(response.body()).string());
           }
           response.close();
+        } catch (IOException e) {
+          e.printStackTrace();
         }
-      } catch (IOException e) {
-        e.printStackTrace();
       }
     }
   }
@@ -135,8 +131,9 @@ public class HarperDBClient extends DB {
     }
   }
 
-  /* TODO find an alternative to between, as the startkey and endkey are strings e.g "user123"
-   * sometimes fails, e.g. for "user8", "user11" in search_value, this might be related to this
+  /* TODO find an alternative to between, as the startkey and endkey are strings e.g "user123" and between expects int
+   * therefore fails sometimes, e.g. for "user8", "user11"
+   * Currently not supported
    */
   @Override
   public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String,
@@ -154,7 +151,8 @@ public class HarperDBClient extends DB {
 
     RequestBody scanBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"search_by_conditions\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
-        "\"get_attributes\": [\n " + attributes + ",\n \"conditions\": [\n  {\n" + condition + "}");
+        "\"limit\": " + recordcount + ",\n\"get_attributes\": [\n " + attributes +
+        ",\n \"conditions\": [\n  {\n" + condition + "}");
     Request request = requestBuilder(scanBody);
 
     try (Response response = CLIENT.newCall(request).execute()) {
@@ -181,7 +179,7 @@ public class HarperDBClient extends DB {
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
     String records = recordsBuilder(key, values);
-
+    records = "[\n" + records + "\n]";
     RequestBody updateBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"update\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"records\": " + records + "}");
@@ -202,7 +200,23 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
-    String records = recordsBuilder(key, values);
+    String records = "[\n";
+    if (batchSize == 1) {
+      records += recordsBuilder(key, values);
+      records += "\n]";
+    } else {
+      batchInserts.add(recordsBuilder(key, values));
+      if (batchInserts.size() == batchSize) {
+        StringJoiner batchRecord = new StringJoiner(",\n");
+        for (String record : batchInserts) {
+          batchRecord.add(record);
+        }
+        records += batchRecord + "\n]";
+        batchInserts.clear();
+      } else {
+        return Status.BATCHED_OK;
+      }
+    }
     RequestBody insertBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"insert\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"records\": " + records + "}");
@@ -223,7 +237,6 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status delete(String table, String key) {
-
     RequestBody deleteBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"delete\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
         "\"hash_values\": " + "[\n\"" + key + "\"\n" + "]\n" + "}");
@@ -255,7 +268,7 @@ public class HarperDBClient extends DB {
   }
 
   private String recordsBuilder(String key, Map<String, ByteIterator> values) {
-    StringBuilder records = new StringBuilder("[\n  {\n   \"id\":" + "\"" + key + "\"" + ",\n");
+    StringBuilder records = new StringBuilder(" {\n   \"id\":" + "\"" + key + "\"" + ",\n");
     int i = 0;
     for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
       i++;
@@ -269,7 +282,7 @@ public class HarperDBClient extends DB {
         records.append("    \"").append(entry.getKey()).append("\": \"").append(value).append("\"\n");
       }
     }
-    records.append("    }\n]\n");
+    records.append("    }");
     return records.toString();
   }
 
@@ -291,7 +304,6 @@ public class HarperDBClient extends DB {
     return attributes.toString();
   }
 
-  // TODO Add scheduling in case of multiple URLs
   private Request requestBuilder(RequestBody body) {
     return new Request.Builder()
         .url(url)
