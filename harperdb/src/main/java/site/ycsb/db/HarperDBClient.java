@@ -20,6 +20,8 @@ public class HarperDBClient extends DB {
   public static final String DBNAME_PROPERTY = "harperdb.dbname";
   public static final String DBNAME_PROPERTY_DEFAULT = "dev";
 
+  public static final String BATCHSIZE_PROPERTY = "harperdb.batchsize";
+
 
   public static final String PORT_PROPERTY = "port";
   public static final String PORT_PROPERTY_DEFAULT = "9925";
@@ -51,7 +53,7 @@ public class HarperDBClient extends DB {
           url += ":" + port;
         }
 
-        batchSize = Integer.parseInt(properties.getProperty("batchsize", "1"));
+        batchSize = Integer.parseInt(properties.getProperty(BATCHSIZE_PROPERTY, "1"));
         String username = properties.getProperty(USERNAME_PROPERTY);
         String password = properties.getProperty(PASSWORD_PROPERTY);
         debug = Boolean.parseBoolean(properties.getProperty("debug", "false"));

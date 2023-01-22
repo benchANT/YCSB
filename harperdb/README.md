@@ -1,6 +1,6 @@
 # HarperDB Binding
 
-Binding for (HarperDB)[https://harperdb.io/] using the (NoSQL operations)[https://api.harperdb.io/#257368f1-2c13-433f-bf99-b650d7421c77]. 
+Binding for [HarperDB](https://harperdb.io/) using the [NoSQL operations](https://api.harperdb.io/#257368f1-2c13-433f-bf99-b650d7421c77). 
 
 ## HarperDB Configuration Parameters 
 
@@ -11,4 +11,8 @@ Binding for (HarperDB)[https://harperdb.io/] using the (NoSQL operations)[https:
 * `harperdb.password` (required):  HarperDB password
 
 * `harperdb.dbname` (required):  the name of the HarperDB schema to use for the YCSB, e.g. `ycsb`
+
+* `harperdb.batchsize` (optional, default=1):  batch insert size, e.g. `1000`
+
+* `debug` (optional, default=false):  print debug messages 
 
