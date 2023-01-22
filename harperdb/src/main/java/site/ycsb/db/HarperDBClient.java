@@ -108,10 +108,15 @@ public class HarperDBClient extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     String attributes = attributesBuilder(fields);
-
+    Pattern pattern = Pattern.compile("[a-zA-Z]+([0-9]+)");
+    Matcher matcher = pattern.matcher(key);
+    String numKey = "";
+    if (matcher.find()) {
+      numKey = matcher.group(1);
+    }
     RequestBody readBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"search_by_hash\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
-        "\"hash_values\": [\n\"" + key + "\"\n],\n\"get_attributes\": [\n " + attributes + "}");
+        "\"hash_values\": [\n\"" + numKey + "\"\n],\n\"get_attributes\": [\n " + attributes + "}");
     Request request = requestBuilder(readBody);
 
     try (Response response = CLIENT.newCall(request).execute()) {
@@ -131,23 +136,21 @@ public class HarperDBClient extends DB {
     }
   }
 
-  /* TODO find an alternative to between, as the startkey and endkey are strings e.g "user123" and between expects int
-   * therefore fails sometimes, e.g. for "user8", "user11"
-   * Currently not supported
-   */
   @Override
   public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String,
       ByteIterator>> result) {
 
     String attributes = attributesBuilder(fields);
-    String regex = "([a-zA-Z]+)([0-9]+)";
+    String regex = "[a-zA-Z]+([0-9]+)";
     Matcher matcher = Pattern.compile(regex).matcher(startkey);
-    String endkey = "";
+    int endkey = 0;
+    int numKey = 0;
     if (matcher.find()) {
-      endkey = matcher.group(1) + (Integer.parseInt(matcher.group(2)) + recordcount - 1);
+      numKey = Integer.parseInt(matcher.group(1));
+      endkey = numKey + recordcount - 1;
     }
-    String condition = "\"search_attribute\": \"id\",\n\"search_type\": \"between\",\n\"search_value\": [\n \""
-        + startkey + "\",\n\"" + endkey + "\"\n ]\n}\n]\n";
+    String condition = "\"search_attribute\": \"id\",\n\"search_type\": \"between\",\n\"search_value\": [\n "
+        + numKey + ",\n" + endkey + "\n ]\n}\n]\n";
 
     RequestBody scanBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"search_by_conditions\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
@@ -178,7 +181,14 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
-    String records = recordsBuilder(key, values);
+    Pattern pattern = Pattern.compile("[a-zA-Z]+([0-9]+)");
+    Matcher matcher = pattern.matcher(key);
+    String numKey = "";
+    if (matcher.find()) {
+      numKey = matcher.group(1);
+    }
+    String records = recordsBuilder(numKey, values);
+
     records = "[\n" + records + "\n]";
     RequestBody updateBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"update\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
@@ -200,12 +210,18 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
+    Pattern pattern = Pattern.compile("[a-zA-Z]+([0-9]+)");
+    Matcher matcher = pattern.matcher(key);
+    String numKey = "";
+    if (matcher.find()) {
+      numKey = matcher.group(1);
+    }
     String records = "[\n";
     if (batchSize == 1) {
-      records += recordsBuilder(key, values);
+      records += recordsBuilder(numKey, values);
       records += "\n]";
     } else {
-      batchInserts.add(recordsBuilder(key, values));
+      batchInserts.add(recordsBuilder(numKey, values));
       if (batchInserts.size() == batchSize) {
         StringJoiner batchRecord = new StringJoiner(",\n");
         for (String record : batchInserts) {
@@ -237,9 +253,15 @@ public class HarperDBClient extends DB {
 
   @Override
   public Status delete(String table, String key) {
+    Pattern pattern = Pattern.compile("[a-zA-Z]+([0-9]+)");
+    Matcher matcher = pattern.matcher(key);
+    String numKey = "";
+    if (matcher.find()) {
+      numKey = matcher.group(1);
+    }
     RequestBody deleteBody = RequestBody.create(MEDIA_TYPE, "{\n    \"operation\": " +
         "\"delete\",\n    \"schema\": \"" + dbname + "\",\n \"table\": \"usertable\",\n" +
-        "\"hash_values\": " + "[\n\"" + key + "\"\n" + "]\n" + "}");
+        "\"hash_values\": " + "[\n\"" + numKey + "\"\n" + "]\n" + "}");
     Request request = requestBuilder(deleteBody);
 
     try (Response response = CLIENT.newCall(request).execute()) {
@@ -269,11 +291,13 @@ public class HarperDBClient extends DB {
 
   private String recordsBuilder(String key, Map<String, ByteIterator> values) {
     StringBuilder records = new StringBuilder(" {\n   \"id\":" + "\"" + key + "\"" + ",\n");
+    records.append("   \"data\":{");
+
     int i = 0;
     for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
       i++;
       String value = entry.getValue().toString();
-      // Escape backslash and double quotation marks to get valid json
+      // Escape backslash and quotation marks to get valid json
       value = value.replaceAll("\\\\", "\\\\\\\\");
       value = value.replaceAll("\"", "\\\\\"");
       if (i < values.size()) {
@@ -283,6 +307,7 @@ public class HarperDBClient extends DB {
       }
     }
     records.append("    }");
+    records.append("   }");
     return records.toString();
   }
 
