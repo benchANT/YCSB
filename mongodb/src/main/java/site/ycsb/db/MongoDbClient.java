@@ -25,6 +25,7 @@
 package site.ycsb.db;
 
 import com.allanbank.mongodb.MongoDbUri;
+import com.mongodb.ReadConcern;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
 import com.mongodb.client.*;
@@ -212,9 +213,14 @@ public class MongoDbClient extends DB {
           databaseName = "ycsb";
 
         }
-
-        readPreference = ReadPreference.valueOf(uri.getValuesFor("readPreference").get(0));
-        writeConcern = WriteConcern.valueOf(uri.getValuesFor("writeConcern").get(0));
+        readPreference = ReadPreference.valueOf("PRIMARY");
+        writeConcern = WriteConcern.MAJORITY;
+        if (url.contains("readPreference")) {
+          readPreference = ReadPreference.valueOf(uri.getValuesFor("readPreference").get(0));
+        }
+        if (url.contains("writeConcern")) {
+          writeConcern = WriteConcern.valueOf(uri.getValuesFor("writeConcern").get(0));
+        }
 
         mongoClient = MongoClients.create(url);
         database =
