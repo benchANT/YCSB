@@ -24,14 +24,11 @@
  */
 package site.ycsb.db;
 
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientURI;
+import com.allanbank.mongodb.MongoDbUri;
+import com.mongodb.ReadConcern;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
-import com.mongodb.client.FindIterable;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoCursor;
-import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.*;
 import com.mongodb.client.model.InsertManyOptions;
 import com.mongodb.client.model.ReplaceOptions;
 import com.mongodb.client.model.UpdateOneModel;
@@ -205,7 +202,7 @@ public class MongoDbClient extends DB {
       }
 
       try {
-        MongoClientURI uri = new MongoClientURI(url);
+        MongoDbUri uri = new MongoDbUri(url);
 
         String uriDb = uri.getDatabase();
         if (!defaultedUrl && (uriDb != null) && !uriDb.isEmpty()
@@ -216,11 +213,16 @@ public class MongoDbClient extends DB {
           databaseName = "ycsb";
 
         }
+        readPreference = ReadPreference.valueOf("PRIMARY");
+        writeConcern = WriteConcern.MAJORITY;
+        if (url.contains("readPreference")) {
+          readPreference = ReadPreference.valueOf(uri.getValuesFor("readPreference").get(0));
+        }
+        if (url.contains("writeConcern")) {
+          writeConcern = WriteConcern.valueOf(uri.getValuesFor("writeConcern").get(0));
+        }
 
-        readPreference = uri.getOptions().getReadPreference();
-        writeConcern = uri.getOptions().getWriteConcern();
-
-        mongoClient = new MongoClient(uri);
+        mongoClient = MongoClients.create(url);
         database =
             mongoClient.getDatabase(databaseName)
                 .withReadPreference(readPreference)
