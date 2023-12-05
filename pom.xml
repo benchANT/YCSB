@@ -121,6 +121,7 @@ LICENSE file.
     <cloudspanner.version>2.0.1</cloudspanner.version>
     <couchbase.version>1.4.10</couchbase.version>
 		<couchbase2.version>2.3.1</couchbase2.version>
+		<couchbase3.version>3.4.6</couchbase3.version>
 		<crail.version>1.1-incubating</crail.version>
     <elasticsearch5-version>5.5.1</elasticsearch5-version>
     <foundationdb.version>5.2.5</foundationdb.version>
@@ -168,6 +169,7 @@ LICENSE file.
     <module>cloudspanner</module>
     <module>couchbase</module>
 		<module>couchbase2</module>
+		<module>couchbase3</module>
 		<module>crail</module>
     <module>dynamodb</module>
     <module>elasticsearch</module>
