@@ -37,16 +37,20 @@ import com.couchbase.client.java.query.ReactiveQueryResult;
 import com.couchbase.client.java.codec.RawJsonTranscoder;
 import com.couchbase.client.java.kv.PersistTo;
 import com.couchbase.client.java.kv.ReplicateTo;
+
 import static com.couchbase.client.java.kv.InsertOptions.insertOptions;
 import static com.couchbase.client.java.kv.UpsertOptions.upsertOptions;
 import static com.couchbase.client.java.kv.ReplaceOptions.replaceOptions;
 import static com.couchbase.client.java.kv.RemoveOptions.removeOptions;
+
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import site.ycsb.ByteIterator;
 import site.ycsb.DB;
@@ -116,6 +120,9 @@ public class Couchbase3Client extends DB {
   private static volatile AtomicInteger primaryKeySeq;
   private static final int MAX_RETRY = 15;
 
+  private static int batchSize;
+  private final List<JsonDocument> bulkInserts = new ArrayList<>();
+
   @Override
   public void init() throws DBException {
     Properties props = getProperties();
@@ -124,6 +131,7 @@ public class Couchbase3Client extends DB {
     bucketName = props.getProperty("couchbase.bucket", "ycsb");
     scopeName = props.getProperty("couchbase.scope", "_default");
     collectionName = props.getProperty("couchbase.collection", "_default");
+    batchSize = Integer.parseInt(props.getProperty("batchsize", "1"));
     scopeEnabled = scopeName != "_default";
     collectionEnabled = collectionName != "_default";
     keyspaceName = getKeyspaceName();
@@ -212,50 +220,53 @@ public class Couchbase3Client extends DB {
 
   /**
    * Checks the replicate parameter value.
+   *
    * @param property provided replicateTo parameter.
    * @return ReplicateTo value.
    */
   private static ReplicateTo parseReplicateTo(final String property) throws DBException {
     int value = Integer.parseInt(property);
     switch (value) {
-    case 0:
-      return ReplicateTo.NONE;
-    case 1:
-      return ReplicateTo.ONE;
-    case 2:
-      return ReplicateTo.TWO;
-    case 3:
-      return ReplicateTo.THREE;
-    default:
-      throw new DBException("\"couchbase.replicateTo\" must be between 0 and 3");
+      case 0:
+        return ReplicateTo.NONE;
+      case 1:
+        return ReplicateTo.ONE;
+      case 2:
+        return ReplicateTo.TWO;
+      case 3:
+        return ReplicateTo.THREE;
+      default:
+        throw new DBException("\"couchbase.replicateTo\" must be between 0 and 3");
     }
   }
 
   /**
    * Checks the persist parameter value.
+   *
    * @param property provided persistTo parameter.
    * @return PersistTo value.
    */
   private static PersistTo parsePersistTo(final String property) throws DBException {
     int value = Integer.parseInt(property);
     switch (value) {
-    case 0:
-      return PersistTo.NONE;
-    case 1:
-      return PersistTo.ONE;
-    case 2:
-      return PersistTo.TWO;
-    case 3:
-      return PersistTo.THREE;
-    case 4:
-      return PersistTo.FOUR;
-    default:
-      throw new DBException("\"couchbase.persistTo\" must be between 0 and 4");
+      case 0:
+        return PersistTo.NONE;
+      case 1:
+        return PersistTo.ONE;
+      case 2:
+        return PersistTo.TWO;
+      case 3:
+        return PersistTo.THREE;
+      case 4:
+        return PersistTo.FOUR;
+      default:
+        throw new DBException("\"couchbase.persistTo\" must be between 0 and 4");
     }
   }
 
   /**
    * Checks the durability parameter.
+   *
    * @param property provided durability parameter.
    * @return DurabilityLevel value.
    */
@@ -263,17 +274,17 @@ public class Couchbase3Client extends DB {
 
     int value = Integer.parseInt(property);
 
-    switch(value){
-    case 0:
-      return DurabilityLevel.NONE;
-    case 1:
-      return DurabilityLevel.MAJORITY;
-    case 2:
-      return DurabilityLevel.MAJORITY_AND_PERSIST_TO_ACTIVE;
-    case 3:
-      return DurabilityLevel.PERSIST_TO_MAJORITY;
-    default :
-      throw new DBException("\"couchbase.durability\" must be between 0 and 3");
+    switch (value) {
+      case 0:
+        return DurabilityLevel.NONE;
+      case 1:
+        return DurabilityLevel.MAJORITY;
+      case 2:
+        return DurabilityLevel.MAJORITY_AND_PERSIST_TO_ACTIVE;
+      case 3:
+        return DurabilityLevel.PERSIST_TO_MAJORITY;
+      default:
+        throw new DBException("\"couchbase.durability\" must be between 0 and 3");
     }
   }
 
@@ -285,8 +296,8 @@ public class Couchbase3Client extends DB {
       environment.shutdown();
       environment = null;
       Iterator it = errors.iterator();
-      while(it.hasNext()) {
-        Throwable t = (Throwable)it.next();
+      while (it.hasNext()) {
+        Throwable t = (Throwable) it.next();
         LOGGER.error(t.getMessage(), t);
       }
     }
@@ -294,8 +305,9 @@ public class Couchbase3Client extends DB {
 
   /**
    * Perform key/value read ("get").
-   * @param table The name of the table.
-   * @param key The record key of the record to read.
+   *
+   * @param table  The name of the table.
+   * @param key    The record key of the record to read.
    * @param fields The list of fields to read, or null for all of them.
    * @param result A HashMap of field/value pairs for the result.
    */
@@ -338,8 +350,9 @@ public class Couchbase3Client extends DB {
 
   /**
    * Update record.
-   * @param table The name of the table.
-   * @param key The record key of the record to write.
+   *
+   * @param table  The name of the table.
+   * @param key    The record key of the record to write.
    * @param values A HashMap of field/value pairs to update in the record.
    */
   @Override
@@ -371,8 +384,9 @@ public class Couchbase3Client extends DB {
 
   /**
    * Insert a record.
-   * @param table The name of the table.
-   * @param key The record key of the record to insert.
+   *
+   * @param table  The name of the table.
+   * @param key    The record key of the record to insert.
    * @param values A HashMap of field/value pairs to insert in the record.
    */
   @Override
@@ -383,28 +397,93 @@ public class Couchbase3Client extends DB {
         Collection collection = collectionEnabled ?
             bucket.scope(this.scopeName).collection(this.collectionName) : bucket.defaultCollection();
         values.put("record_id", new StringByteIterator(String.valueOf(primaryKeySeq.incrementAndGet())));
-        if (useDurabilityLevels) {
-          if (upsert) {
-            collection.upsert(formatId(table, key), encode(values), upsertOptions().durability(durabilityLevel));
+        if (batchSize == 1) {
+          if (useDurabilityLevels) {
+            if (upsert) {
+              collection.upsert(formatId(table, key), encode(values), upsertOptions().durability(durabilityLevel));
+            } else {
+              collection.insert(formatId(table, key), encode(values), insertOptions().durability(durabilityLevel));
+            }
           } else {
-            collection.insert(formatId(table, key), encode(values), insertOptions().durability(durabilityLevel));
+            if (upsert) {
+              collection.upsert(formatId(table, key), encode(values), upsertOptions().durability(persistTo, replicateTo));
+            } else {
+              collection.insert(formatId(table, key), encode(values), insertOptions().durability(persistTo, replicateTo));
+            }
           }
         } else {
-          if (upsert) {
-            collection.upsert(formatId(table, key), encode(values), upsertOptions().durability(persistTo, replicateTo));
+          bulkInserts.add(new JsonDocument(formatId(table, key), values));
+          if (bulkInserts.size() == batchSize) {
+            // Current problems: BUCKET_OPENS_IN_PROGRESS error on the first few inserts, in case of an error only the
+            // documents from before the error are inserted and the bulkInserts list is cleared to get rid of the
+            // document that caused the error and the potentially already inserted documents
+            ReactiveCollection reactiveCollection = collectionEnabled ?
+                bucket.scope(this.scopeName).collection(this.collectionName).reactive()
+                : bucket.defaultCollection().reactive();
+            if (useDurabilityLevels) {
+              if (upsert) {
+                Flux.fromIterable(bulkInserts)
+                    .flatMap(docToInsert ->
+                        reactiveCollection.upsert(docToInsert.getId(), encode(docToInsert.getContent()), upsertOptions()
+                                .durability(durabilityLevel))
+                            .doOnError(throwable -> {
+                              LOGGER.error("insert failed with exception :" + throwable.getMessage());
+                              bulkInserts.clear();
+                              throw new RuntimeException("insert failed with exception :" + throwable.getMessage());
+                            }))
+                    .blockLast();
+              } else {
+                Flux.fromIterable(bulkInserts)
+                    .flatMap(docToInsert ->
+                        reactiveCollection.insert(docToInsert.getId(), encode(docToInsert.getContent()), insertOptions()
+                                .durability(persistTo, replicateTo))
+                            .doOnError(throwable -> {
+                              LOGGER.error("insert failed with exception :" + throwable.getMessage());
+                              bulkInserts.clear();
+                              throw new RuntimeException("insert failed with exception :" + throwable.getMessage());
+                            }))
+                    .blockLast();
+              }
+            } else {
+              if (upsert) {
+                Flux.fromIterable(bulkInserts)
+                    .flatMap(docToInsert ->
+                        reactiveCollection.insert(docToInsert.getId(), encode(docToInsert.getContent()))
+                            .doOnError(throwable -> {
+                              LOGGER.error("insert failed with exception :" + throwable.getMessage());
+                              bulkInserts.clear();
+                              throw new RuntimeException("insert failed with exception :" + throwable.getMessage());
+                            }))
+                    .blockLast();
+              } else {
+                Flux.fromIterable(bulkInserts)
+                    .flatMap(docToInsert ->
+                        reactiveCollection.insert(docToInsert.getId(), encode(docToInsert.getContent()))
+                            .doOnError(throwable -> {
+                              LOGGER.error("insert failed with exception :" + throwable.getMessage());
+                              bulkInserts.clear();
+                              throw new RuntimeException("insert failed with exception :" + throwable.getMessage());
+                            }))
+                    .blockLast();
+              }
+            }
+            bulkInserts.clear();
           } else {
-            collection.insert(formatId(table, key), encode(values), insertOptions().durability(persistTo, replicateTo));
+            return Status.BATCHED_OK;
           }
         }
+
+
         return Status.OK;
       } catch (Throwable t) {
-        if (++retryCount == MAX_RETRY) {
-          errors.add(t);
-          LOGGER.error("insert failed with exception :" + t);
-          return Status.ERROR;
-        } else {
-          retryWait(retryCount);
-        }
+        // If this if statement is enabled, errors do not show up in the results
+//        if (++retryCount == MAX_RETRY) {
+        errors.add(t);
+        LOGGER.error("insert failed with exception :" + t);
+        return Status.ERROR;
+//        } else {
+//          retryWait(retryCount);
+//        }
       }
     }
   }
@@ -425,8 +504,9 @@ public class Couchbase3Client extends DB {
 
   /**
    * Remove a record.
+   *
    * @param table The name of the table.
-   * @param key The record key of the record to delete.
+   * @param key   The record key of the record to delete.
    */
   @Override
   public Status delete(final String table, final String key) {
@@ -455,11 +535,12 @@ public class Couchbase3Client extends DB {
 
   /**
    * Query for specific rows of data using SQL++.
-   * @param table The name of the table.
-   * @param startkey The record key of the first record to read.
+   *
+   * @param table       The name of the table.
+   * @param startkey    The record key of the first record to read.
    * @param recordcount The number of records to read.
-   * @param fields The list of fields to read, or null for all of them.
-   * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
+   * @param fields      The list of fields to read, or null for all of them.
+   * @param result      A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
    */
   @Override
   public Status scan(final String table, final String startkey, final int recordcount, final Set<String> fields,
@@ -486,10 +567,11 @@ public class Couchbase3Client extends DB {
 
   /**
    * Performs the {@link #scan(String, String, int, Set, Vector)} operation for all fields.
-   * @param table The name of the table.
-   * @param startkey The record key of the first record to read.
+   *
+   * @param table       The name of the table.
+   * @param startkey    The record key of the first record to read.
    * @param recordcount The number of records to read.
-   * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
+   * @param result      A Vector of HashMaps, where each HashMap is a set field/value pairs for one record.
    */
   private Status scanAllFields(final String table, final String startkey, final int recordcount,
                                final Vector<HashMap<String, ByteIterator>> result) {
@@ -505,25 +587,25 @@ public class Couchbase3Client extends DB {
 
     cluster.reactive().query(query,
             scanQueryOptions
-            .pipelineBatch(128)
-            .pipelineCap(1024)
-            .scanCap(1024)
-            .adhoc(adhoc)
-            .readonly(true)
-            .parameters(JsonArray.from(numericId(startkey), recordcount)))
-            .flatMapMany(ReactiveQueryResult::rowsAsObject)
-              .onErrorResume(e -> {
-                  LOGGER.error("Start Key: " + startkey + " Count: "
-                      + recordcount + " Error:" + e.getClass() + " Info: " + e.getMessage());
-                  return Mono.empty();
-                })
-              .map(row -> {
-                  HashMap<String, ByteIterator> tuple = new HashMap<>();
-                  tuple.put("record_id", new StringByteIterator(row.getString("record_id")));
-                  return tuple;
-                })
-              .toStream()
-              .forEach(data::add);
+                .pipelineBatch(128)
+                .pipelineCap(1024)
+                .scanCap(1024)
+                .adhoc(adhoc)
+                .readonly(true)
+                .parameters(JsonArray.from(numericId(startkey), recordcount)))
+        .flatMapMany(ReactiveQueryResult::rowsAsObject)
+        .onErrorResume(e -> {
+          LOGGER.error("Start Key: " + startkey + " Count: "
+              + recordcount + " Error:" + e.getClass() + " Info: " + e.getMessage());
+          return Mono.empty();
+        })
+        .map(row -> {
+          HashMap<String, ByteIterator> tuple = new HashMap<>();
+          tuple.put("record_id", new StringByteIterator(row.getString("record_id")));
+          return tuple;
+        })
+        .toStream()
+        .forEach(data::add);
 
     result.addAll(data);
     return Status.OK;
@@ -531,11 +613,12 @@ public class Couchbase3Client extends DB {
 
   /**
    * Performs the {@link #scan(String, String, int, Set, Vector)} operation only for a subset of the fields.
-   * @param table The name of the table
-   * @param startkey The record key of the first record to read.
+   *
+   * @param table       The name of the table
+   * @param startkey    The record key of the first record to read.
    * @param recordcount The number of records to read
-   * @param fields The list of fields to read, or null for all of them
-   * @param result A Vector of HashMaps, where each HashMap is a set field/value pairs for one record
+   * @param fields      The list of fields to read, or null for all of them
+   * @param result      A Vector of HashMaps, where each HashMap is a set field/value pairs for one record
    * @return The result of the operation.
    */
 
@@ -544,7 +627,7 @@ public class Couchbase3Client extends DB {
     final Collection collection = bucket.defaultCollection();
 
     final List<HashMap<String, ByteIterator>> data = new ArrayList<HashMap<String, ByteIterator>>(recordcount);
-    final String query =  "SELECT RAW meta().id FROM " + keyspaceName +
+    final String query = "SELECT RAW meta().id FROM " + keyspaceName +
         " WHERE record_id >= $1 ORDER BY record_id LIMIT $2";
     final ReactiveCollection reactiveCollection = collection.reactive();
     QueryOptions scanQueryOptions = QueryOptions.queryOptions();
@@ -555,20 +638,20 @@ public class Couchbase3Client extends DB {
 
     reactiveCluster.query(query,
             scanQueryOptions
-            .adhoc(adhoc)
-            .parameters(JsonArray.from(numericId(startkey), recordcount)))
+                .adhoc(adhoc)
+                .parameters(JsonArray.from(numericId(startkey), recordcount)))
         .flatMapMany(res -> {
-            return res.rowsAs(String.class);
-          })
+          return res.rowsAs(String.class);
+        })
         .flatMap(id -> {
-            return reactiveCollection
+          return reactiveCollection
               .get(id, GetOptions.getOptions().transcoder(RawJsonTranscoder.INSTANCE));
-          })
+        })
         .map(getResult -> {
-            HashMap<String, ByteIterator> tuple = new HashMap<>();
-            decodeStringSource(getResult.contentAs(String.class), fields, tuple);
-            return tuple;
-          })
+          HashMap<String, ByteIterator> tuple = new HashMap<>();
+          decodeStringSource(getResult.contentAs(String.class), fields, tuple);
+          return tuple;
+        })
         .toStream()
         .forEach(data::add);
 
@@ -578,16 +661,17 @@ public class Couchbase3Client extends DB {
 
   /**
    * Get string values from fields.
+   *
    * @param source JSON source data.
    * @param fields Fields to return.
-   * @param dest Map of Strings where each value is a requested field.
+   * @param dest   Map of Strings where each value is a requested field.
    */
   private void decodeStringSource(final String source, final Set<String> fields,
-                      final Map<String, ByteIterator> dest) {
+                                  final Map<String, ByteIterator> dest) {
     try {
       JsonNode json = JacksonTransformers.MAPPER.readTree(source);
       boolean checkFields = fields != null && !fields.isEmpty();
-      for (Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields(); jsonFields.hasNext();) {
+      for (Iterator<Map.Entry<String, JsonNode>> jsonFields = json.fields(); jsonFields.hasNext(); ) {
         Map.Entry<String, JsonNode> jsonField = jsonFields.next();
         String name = jsonField.getKey();
         if (checkFields && !fields.contains(name)) {
@@ -607,7 +691,7 @@ public class Couchbase3Client extends DB {
    * Helper method to turn the prefix and key into a proper document ID.
    *
    * @param prefix the prefix (table).
-   * @param key the key itself.
+   * @param key    the key itself.
    * @return a document ID that can be used with Couchbase.
    */
   private static String formatId(final String prefix, final String key) {
@@ -616,6 +700,7 @@ public class Couchbase3Client extends DB {
 
   /**
    * Helper function to convert the key to a numeric value.
+   *
    * @param key the key text
    * @return a string with non-numeric characters removed
    */
@@ -625,6 +710,7 @@ public class Couchbase3Client extends DB {
 
   /**
    * Helper function to generate the keyspace name.
+   *
    * @return a string with the computed keyspace name
    */
   private String getKeyspaceName() {
@@ -641,8 +727,32 @@ public class Couchbase3Client extends DB {
   public static void retryWait(int count) {
     try {
       Thread.sleep(count * 200L);
-    } catch(InterruptedException e) {
+    } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+  }
+}
+
+
+class JsonDocument {
+  private final String id;
+  private final Map content;
+
+  public JsonDocument(String id, Map content) {
+    this.id = id;
+    this.content = content;
+  }
+
+  public String getId() {
+    return id;
+  }
+
+  public Map getContent() {
+    return content;
+  }
+
+  @Override
+  public String toString() {
+    return "JsonDocument{id='" + id + "', content=" + content + "}";
   }
 }
