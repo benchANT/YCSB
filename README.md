@@ -1,5 +1,6 @@
 <!--
 Copyright (c) 2010 Yahoo! Inc., 2012 - 2016 YCSB contributors.
+Copyright (c) 2024 benchANT GmbH. All rights reserved.
 All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you
@@ -15,6 +16,56 @@ implied. See the License for the specific language governing
 permissions and limitations under the License. See accompanying
 LICENSE file.
 -->
+
+# Preamble
+
+This branch hosts a fork of the YCSB with a new workload. The workload is only realized for the RUN phase
+and does not implement a LOAD pahse. For the LAOD phase, it assumes that the databases have been loaded 
+using a number of [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) instances.
+
+The new workload makes a few changes to the default database bindings and therefore cannot be easily
+integrated in the main branch of the repository. Most specifically, the workload comes with a set of 
+up to 29 queries that need to be mapped to concrete queries by the respective database binding.
+
+Currently supported bindings are:
+- AWS Timestream
+- Azure Data Explorer
+- InfluxDB with API version v3
+
+For running and configuring the new workload, it is best to use `workloads/workload_telegraf` as a template.
+
+The workload has been tested with 
+- Maven 3.9.5
+- Java JDK 20.0.2; it is beneficial to set `JAVA_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED"`
+
+### Build
+
+After adding `mvn` and `java` to your `PATH` you can build the core and the three bindings as follows
+
+* `mvn -pl site.ycsb:core -am package -Dcheckstyle.skip`
+* `mvn -pl site.ycsb:influxdb-binding -am  package -Dcheckstyle.skip`
+* `mvn -pl site.ycsb:awstimestream-binding -am  package -Dcheckstyle.skip`
+* `mvn -pl site.ycsb:azuredataexplorer-binding -am  package -Dcheckstyle.skip`
+
+### Run
+
+The application can be run as follows
+
+* InfluxDB: `./bin/ycsb.sh run influxdb -P workloads/workload_telegraf`
+* AWS Timestream `./bin/ycsb.sh run awstimestream -P workloads/workload_telegraf`
+* Azure Data Explorer `./bin/ycsb.sh run azuredataexplorer -P workloads/workload_telegraf`
+
+Note that for running AWS Timestream two environment variables need to be set
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+For Azure Data Explorer, the following environment variables can be used
+- `AZURE_TENANT`
+- `AZURE_CLIENT_ID`
+- `AZURE_SECRET`
+
+For InfluxDB DBaaS, use the following variable:
+- `INFLUX_ENTERPRISE_TOKEN`
 
 YCSB
 ====================================

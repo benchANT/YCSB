@@ -1,0 +1,96 @@
+# Copyright (c) 2010 Yahoo! Inc. All rights reserved.
+# Copyright (c) 2024 benchANT GmbH All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you
+# may not use this file except in compliance with the License. You
+# may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#                             
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License. See accompanying
+# LICENSE file.
+
+# TelegrafWorkload
+
+workload=site.ycsb.workloads.TelegrafWorkload
+
+## db will be set by ycsb.sh
+## number of threads (clients) to use. The implementation of TelegrafWorkload 
+## requires threadcount=1
+threadcount=1
+
+## duration in ISO-8601 format
+## determines the time interval used in the queries
+## https://docs.oracle.com/javase/8/docs/api/java/time/Duration.html#parse-java.lang.CharSequence-
+timespan=P1d
+
+## the targeted request rate; this is a native YCSB parameter and 
+## denotes the number of requests per second to be issued, if possible
+# target=
+
+## new parameter: allows to change to unit of `target` from req/sec to req/<target_timeunit>.
+## target=6 and target_unit=MINUTES yields 6 requests per minute
+## target_timeunit=MINUTES
+
+## A list of operations to be executed in the order specified by `order`
+## the list is comma separated and whitespaces are allowed, letters are casted to lowercase
+## the format of an operation is <'q', n, n> (a 'q' followed by two digits).
+## queries run from q01 to q27.
+## the list can also contain the constant ALL which means to include all queries.
+## defaults to `ALL` if not set
+# operations=q01,q02
+
+## defines how often each query shall be run
+iterations=1
+
+## defines the order in which the operations are processed. 
+## Takes two values: `depth` and `breadth`. If not set, `depth` is chosen.
+## `depth` means that queries are processed en bloc: q01, q01, q01, ..., q02, q02, ...
+## `breadth` means that each query is processed once before the second round starts:
+## q01, q02, q03, ..., q01, q02, q03, ... 
+## order=depth
+
+## if set to true, prints all collected query results at the end 
+## of a run. The implementation will collect a maximum of 65k query results
+# printqueryresults=false
+
+## standard ycsb query parameter
+## 'raw' is recommended
+measurementtype=raw
+
+## should binding messages be logged to console?
+## debug=false
+
+## INFLUX SECTION
+### mandatory argument
+influxdb.url=
+### mandatory argument
+influxdb.database=
+### optional and useless argument
+# influxdb.inittable=
+
+### better not use this
+## influxdb.token=
+
+## TIMESTREAM SECTION
+### mandatory argument
+timestream.database=
+### mandatory argument
+timestream.region=
+### optional and useless argument
+timestream.inittable=
+### required if timestream.inittable=true
+# timestream.maxconnections=5000
+### required if timestream.inittable=true
+# timestream.writeRetries=10
+### required if timestream.inittable=true
+# timestream.apitimeout=100
+
+## Data Explorer Section
+### mandatory parameter
+dataexplorer.endpoint=
+dataexplorer.database=

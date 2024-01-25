@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2010-2016 Yahoo! Inc., 2017 YCSB contributors All rights reserved.
+ * Copyright (c) 2024 benchANT GmbH. All rights reserved.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -128,6 +129,11 @@ public final class Client {
    * Target number of operations per second.
    */
   public static final String TARGET_PROPERTY = "target";
+
+    /**
+   * The time unit of the target. "seconds" if not set.
+   */
+  public static final String TARGET_TIMEUNIT_PROPERTY = "target_timeunit";
 
   /**
    * The maximum amount of time (in seconds) for which the benchmark will be run.
@@ -286,11 +292,12 @@ public final class Client {
     int threadcount = Integer.parseInt(props.getProperty(THREAD_COUNT_PROPERTY, "1"));
     String dbname = props.getProperty(DB_PROPERTY, "site.ycsb.BasicDB");
     int target = Integer.parseInt(props.getProperty(TARGET_PROPERTY, "0"));
+    long targetDivider = TimeUnit.valueOf(props.getProperty(TARGET_TIMEUNIT_PROPERTY, TimeUnit.SECONDS.toString()).toUpperCase()).toSeconds(1);
 
     //compute the target throughput
     double targetperthreadperms = -1;
     if (target > 0) {
-      double targetperthread = ((double) target) / ((double) threadcount);
+      double targetperthread = ((double) target) / ((double) threadcount) / ((double) targetDivider);
       targetperthreadperms = targetperthread / 1000.0;
     }
 

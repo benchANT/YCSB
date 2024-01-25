@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2010 Yahoo! Inc., 2016-2020 YCSB contributors. All rights reserved.
+ * Copyright (c) 2024 benchANT GmbH. All rights reserved.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -32,8 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class DBWrapper extends DB {
   private final DB db;
-  private final Measurements measurements;
-  private final Tracer tracer;
+  protected final Measurements measurements;
+  protected final Tracer tracer;
 
   private boolean reportLatencyForEachError = false;
   private Set<String> latencyTrackedErrors = new HashSet<String>();
@@ -170,7 +171,7 @@ public class DBWrapper extends DB {
     }
   }
 
-  private void measure(String op, Status result, long intendedStartTimeNanos,
+  protected void measure(String op, Status result, long intendedStartTimeNanos,
                        long startTimeNanos, long endTimeNanos) {
     String measurementName = op;
     if (result == null || !result.isOk()) {
