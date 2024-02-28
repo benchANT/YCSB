@@ -154,6 +154,8 @@ public class CassandraCQLClient extends DB {
         session.execute(
             "CREATE TABLE IF NOT EXISTS usertable (y_id varchar primary key" + fields
         );
+        logger.info("Creating table with command: 'CREATE TABLE IF NOT EXISTS usertable (y_id varchar primary key"
+            + fields + "'");
       } catch (Exception e) {
         throw new DBException(e);
       }
