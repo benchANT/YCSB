@@ -62,6 +62,7 @@ DATABASES = {
     "basicts"      : "site.ycsb.BasicTSDB",
     "cassandra-cql": "site.ycsb.db.CassandraCQLClient",
     "cassandra2-cql": "site.ycsb.db.CassandraCQLClient",
+    "cassandra4-cql": "site.ycsb.db.cassandra4.CassandraCQLClient",
     "cloudspanner" : "site.ycsb.db.cloudspanner.CloudSpannerClient",
     "couchbase"    : "site.ycsb.db.CouchbaseClient",
     "couchbase2"   : "site.ycsb.db.couchbase2.Couchbase2Client",
