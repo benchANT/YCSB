@@ -80,8 +80,8 @@ public class CassandraCQLClient extends DB {
       "cassandra.coreconnections";
   public static final String CONNECT_TIMEOUT_MILLIS_PROPERTY =
       "cassandra.connecttimeoutmillis";
-  public static final String READ_TIMEOUT_MILLIS_PROPERTY =
-      "cassandra.readtimeoutmillis";
+  public static final String REQUEST_TIMEOUT_MILLIS_PROPERTY =
+      "cassandra.requesttimeoutmillis";
 
   /**
    * Count the number of times initialized to teardown on the last
@@ -115,11 +115,11 @@ public class CassandraCQLClient extends DB {
         String keyspace = getProperties().getProperty(KEYSPACE_PROPERTY,
             KEYSPACE_PROPERTY_DEFAULT);
         String maxConnections = getProperties().getProperty(
-            MAX_CONNECTIONS_PROPERTY, "100");
+            MAX_CONNECTIONS_PROPERTY);
         String connectTimoutMillis = getProperties().getProperty(
             CONNECT_TIMEOUT_MILLIS_PROPERTY);
-        String readTimoutMillis = getProperties().getProperty(
-            READ_TIMEOUT_MILLIS_PROPERTY);
+        String requestTimoutMillis = getProperties().getProperty(
+            REQUEST_TIMEOUT_MILLIS_PROPERTY);
         //TODO: Check, if there is an equivalent for setCoreConnectionsPerHost
         ProgrammaticDriverConfigLoaderBuilder loader = DriverConfigLoader.programmaticBuilder();
         loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, DefaultConsistencyLevel.QUORUM.name());
@@ -130,9 +130,9 @@ public class CassandraCQLClient extends DB {
         if (maxConnections != null) {
           loader.withInt(DefaultDriverOption.CONNECTION_MAX_REQUESTS, Integer.parseInt(maxConnections));
         }
-        if (readTimoutMillis != null) {
+        if (requestTimoutMillis != null) {
           loader.withDuration(DefaultDriverOption.REQUEST_TIMEOUT,
-              Duration.ofMillis(Integer.parseInt(readTimoutMillis)));
+              Duration.ofMillis(Integer.parseInt(requestTimoutMillis)));
         }
 
         session = CqlSession.builder()
