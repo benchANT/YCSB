@@ -15,7 +15,7 @@ permissions and limitations under the License. See accompanying
 LICENSE file.
 -->
 
-# Apache Cassandra 2.x CQL binding
+# Apache Cassandra 4.x CQL binding
 
 Binding for [Apache Cassandra](http://cassandra.apache.org), using the CQL API
 via the [DataStax
