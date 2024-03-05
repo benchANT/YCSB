@@ -17,15 +17,14 @@ LICENSE file.
 
 # Apache Cassandra 4.x CQL binding
 
-Binding for [Apache Cassandra](http://cassandra.apache.org), using the CQL API
+Binding for [Datastax AstraDB](https://www.datastax.com/), using the Java driver
 via the [DataStax
 driver](https://docs.datastax.com/en/developer/java-driver/4.3/).
 
 ## Cassandra Configuration Parameters
 
 - `cassandra.keyspace`
-  Keyspace name - must match the keyspace for the table created (see above).
-  See http://docs.datastax.com/en/cql/3.1/cql/cql_reference/create_keyspace_r.html for details.
+  Keyspace name, a table with this name is automatically created if it does not exist.
 
   - Default value is `ycsb`
 
