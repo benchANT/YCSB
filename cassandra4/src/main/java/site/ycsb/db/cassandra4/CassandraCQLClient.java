@@ -25,12 +25,17 @@ import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.config.ProgrammaticDriverConfigLoaderBuilder;
 import com.datastax.oss.driver.api.core.cql.*;
 import com.datastax.oss.driver.api.core.metadata.Metadata;
+import com.datastax.oss.driver.api.core.type.DataType;
+import com.datastax.oss.driver.api.core.type.DataTypes;
+import com.datastax.oss.driver.api.querybuilder.select.Select;
+
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.helpers.MessageFormatter;
 import site.ycsb.*;
 
-import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
@@ -207,52 +212,45 @@ public class CassandraCQLClient extends DB {
 
       // Prepare statement on demand
       if (stmt == null) {
-
+        Select query;
         if (fields == null) {
-          String annQuery = String.format(
-              "SELECT * FROM usertable WHERE y_id=?"
-          );
-
-          stmt = session.prepare(annQuery);
-          ResultSet rs = session.execute(stmt.bind(key));
-          // Should be only 1 row
-          Row row = rs.one();
-          ColumnDefinitions cd = row.getColumnDefinitions();
-
-          for (ColumnDefinition def : cd) {
-            ByteBuffer val = row.getBytesUnsafe(def.getName());
-            if (val != null) {
-              result.put(key, new ByteArrayByteIterator(val.array()));
-            } else {
-              result.put(key, null);
-            }
-          }
+          query = selectFrom(table).all();
         } else {
-          StringBuilder fieldsString = new StringBuilder();
-          for (String col : fields) {
-            fieldsString.append(col);
-          }
-          String annQuery = String.format(
-              "SELECT " + fieldsString + " FROM usertable WHERE y_id=?"
-          );
-          stmt = session.prepare(annQuery);
-          ResultSet rs = session.execute(stmt.bind(key));
-          // Should be only 1 row
-          Row row = rs.one();
-          ColumnDefinitions cd = row.getColumnDefinitions();
-
-          for (ColumnDefinition def : cd) {
-            ByteBuffer val = row.getBytesUnsafe(def.getName());
-            if (val != null) {
-              result.put(key, new ByteArrayByteIterator(val.array()));
-            } else {
-              result.put(key, null);
-            }
-          }
+          query = selectFrom(table).columns(fields.toArray(new String[fields.size()]));
+        }
+        query = query.whereColumn(YCSB_KEY).isEqualTo(bindMarker());
+        query.limit(1);
+        stmt = session.prepare(query.build());
+        // TODO: Tracing does not exist any more?
+        PreparedStatement prevStmt = (fields == null)
+                              ? readAllStmt.getAndSet(stmt)
+                              : readStmts.putIfAbsent(new HashSet(fields), stmt);
+        if (prevStmt != null) {
+          stmt = prevStmt;
         }
       }
-      return Status.OK;
+      logger.debug(stmt.getQuery());
+      logger.debug("key = {}", key);
 
+      ResultSet rs = session.execute(stmt.bind(key));
+      // Should be only 1 row
+      Row row = rs.one();
+      if (row == null) {
+        return Status.NOT_FOUND;
+      }
+      ColumnDefinitions cds = rs.getColumnDefinitions();
+      for(ColumnDefinition c : cds) {
+        DataType myType = c.getType();
+        if(DataTypes.TEXT.equals(myType)) {
+          String cName = c.getName().toString();
+          String value = row.getString(cName);
+          result.put(cName, new StringByteIterator(value));
+        } else {
+          logger.error("unexpected type: " + myType);
+          return Status.ERROR;
+        }        
+      }
+      return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error reading key: {}", key).getMessage(), e);
       return Status.ERROR;
