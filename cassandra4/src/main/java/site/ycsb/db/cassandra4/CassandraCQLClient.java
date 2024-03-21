@@ -310,33 +310,32 @@ public class CassandraCQLClient extends DB {
         while (it.hasNext()) {
           updateQuery = updateQuery.setColumn(it.next(), bindMarker());
         }
-        PreparedStatement ps = session.prepare(
-          updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker("primaryKey")).build()
+        stmt = session.prepare(
+          updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker()).build()
         );
-        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), ps);
+        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), stmt);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
       }
-      BoundStatement boundStmt = stmt.bind();
-      Iterator<String> it = fields.iterator();
-      int index = 0;
-      while(it.hasNext()) {
-        String field = it.next();
-        String value = values.get(field).toString();
-        boundStmt.setString(index, value);
-        index++;
-      }
-      boundStmt.setString(index, key);
-      ResultSet rs = session.execute(boundStmt);
-
       if (logger.isDebugEnabled()) {
-        logger.debug(stmt.getQuery());
-        logger.debug("key = {}", key);
+        logger.error(stmt.getQuery());
+        logger.error("key = {}", key);
+        logger.error("fields = {}", fields);
         for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-          logger.debug("{} = {}", entry.getKey(), entry.getValue());
+          logger.error("{} = {}", entry.getKey(), entry.getValue());
         }
       }
+      Iterator<String> it = fields.iterator();
+      int index = 0;
+      Object[] vals = new String[fields.size() + 1];
+      while(it.hasNext()) {
+        String field = it.next();
+        vals[index++] = values.get(field).toString();
+      }
+      vals[index] = key;
+      BoundStatement boundStmt = stmt.bind(vals);
+      ResultSet rs = session.execute(boundStmt);
       return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error updating key: {}", key).getMessage(), e);
