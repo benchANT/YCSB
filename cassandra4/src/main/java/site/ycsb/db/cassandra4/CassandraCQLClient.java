@@ -207,14 +207,14 @@ public class CassandraCQLClient extends DB {
 
       // Prepare statement on demand
       if (stmt == null) {
-        SimpleStatementBuilder selectBuilder;
 
         if (fields == null) {
           String annQuery = String.format(
-              "SELECT * FROM usertable"
+              "SELECT * FROM usertable WHERE y_id=?"
           );
 
-          ResultSet rs = session.execute(annQuery);
+          stmt = session.prepare(annQuery);
+          ResultSet rs = session.execute(stmt.bind(key));
           // Should be only 1 row
           Row row = rs.one();
           ColumnDefinitions cd = row.getColumnDefinitions();
@@ -233,10 +233,10 @@ public class CassandraCQLClient extends DB {
             fieldsString.append(col);
           }
           String annQuery = String.format(
-              "SELECT " + fieldsString + " FROM usertable"
+              "SELECT " + fieldsString + " FROM usertable WHERE y_id=?"
           );
-
-          ResultSet rs = session.execute(annQuery);
+          stmt = session.prepare(annQuery);
+          ResultSet rs = session.execute(stmt.bind(key));
           // Should be only 1 row
           Row row = rs.one();
           ColumnDefinitions cd = row.getColumnDefinitions();
