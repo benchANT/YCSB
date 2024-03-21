@@ -28,6 +28,10 @@ import com.datastax.oss.driver.api.core.metadata.Metadata;
 import com.datastax.oss.driver.api.core.type.DataType;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
+import com.datastax.oss.driver.api.querybuilder.update.OngoingAssignment;
+import com.datastax.oss.driver.api.querybuilder.update.UpdateStart;
+import com.datastax.oss.driver.api.querybuilder.update.UpdateWithAssignments;
+import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.*;
 
@@ -294,32 +298,37 @@ public class CassandraCQLClient extends DB {
 
     try {
       Set<String> fields = values.keySet();
+      if(fields.size() == 0) {
+        return Status.UNEXPECTED_STATE;
+      }
       PreparedStatement stmt = updateStmts.get(fields);
-
       // Prepare statement on demand
       if (stmt == null) {
+        Iterator<String> it = fields.iterator();
+        UpdateWithAssignments updateQuery = QueryBuilder.update(table).setColumn(it.next(), bindMarker());
         // Add fields
-        StringBuilder fieldsString = new StringBuilder();
-        for (String field : fields) {
-          fieldsString.append(field).append("=?");
-          fieldsString.append(", ");
+        while (it.hasNext()) {
+          updateQuery = updateQuery.setColumn(it.next(), bindMarker());
         }
-        PreparedStatement ps = session.prepare(String.format(
-            "UPDATE " + table + " SET " + fieldsString.substring(0, fieldsString.length() - 2) + " WHERE y_id=?")
+        PreparedStatement ps = session.prepare(
+          updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker("primaryKey")).build()
         );
-        BoundStatement boundStmt = ps.bind().setString(1, key);
-        ColumnDefinitions vars = ps.getVariableDefinitions();
-        for (int i = 0; i < vars.size() - 1; i++) {
-          String tmp = vars.get(i).toString().replace("ycsb.usertable.", "").replace(" TEXT", "");
-          boundStmt.setString(i, values.get(tmp).toString());
-        }
-        session.execute(boundStmt);
-
         PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), ps);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
       }
+      BoundStatement boundStmt = stmt.bind();
+      Iterator<String> it = fields.iterator();
+      int index = 0;
+      while(it.hasNext()) {
+        String field = it.next();
+        String value = values.get(field).toString();
+        boundStmt.setString(index, value);
+        index++;
+      }
+      boundStmt.setString(index, key);
+      ResultSet rs = session.execute(boundStmt);
 
       if (logger.isDebugEnabled()) {
         logger.debug(stmt.getQuery());
@@ -328,7 +337,6 @@ public class CassandraCQLClient extends DB {
           logger.debug("{} = {}", entry.getKey(), entry.getValue());
         }
       }
-
       return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error updating key: {}", key).getMessage(), e);
