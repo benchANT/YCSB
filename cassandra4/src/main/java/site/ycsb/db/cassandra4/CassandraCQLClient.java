@@ -28,6 +28,10 @@ import com.datastax.oss.driver.api.core.metadata.Metadata;
 import com.datastax.oss.driver.api.core.type.DataType;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
+import com.datastax.oss.driver.api.querybuilder.update.OngoingAssignment;
+import com.datastax.oss.driver.api.querybuilder.update.UpdateStart;
+import com.datastax.oss.driver.api.querybuilder.update.UpdateWithAssignments;
+import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.*;
 
@@ -294,41 +298,44 @@ public class CassandraCQLClient extends DB {
 
     try {
       Set<String> fields = values.keySet();
+      if(fields.size() == 0) {
+        return Status.UNEXPECTED_STATE;
+      }
       PreparedStatement stmt = updateStmts.get(fields);
-
       // Prepare statement on demand
       if (stmt == null) {
+        Iterator<String> it = fields.iterator();
+        UpdateWithAssignments updateQuery = QueryBuilder.update(table).setColumn(it.next(), bindMarker());
         // Add fields
-        StringBuilder fieldsString = new StringBuilder();
-        for (String field : fields) {
-          fieldsString.append(field).append("=?");
-          fieldsString.append(", ");
+        while (it.hasNext()) {
+          updateQuery = updateQuery.setColumn(it.next(), bindMarker());
         }
-        PreparedStatement ps = session.prepare(String.format(
-            "UPDATE " + table + " SET " + fieldsString.substring(0, fieldsString.length() - 2) + " WHERE y_id=?")
+        stmt = session.prepare(
+          updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker()).build()
         );
-        BoundStatement boundStmt = ps.bind().setString(1, key);
-        ColumnDefinitions vars = ps.getVariableDefinitions();
-        for (int i = 0; i < vars.size() - 1; i++) {
-          String tmp = vars.get(i).toString().replace("ycsb.usertable.", "").replace(" TEXT", "");
-          boundStmt.setString(i, values.get(tmp).toString());
-        }
-        session.execute(boundStmt);
-
-        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), ps);
+        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), stmt);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
       }
-
       if (logger.isDebugEnabled()) {
-        logger.debug(stmt.getQuery());
-        logger.debug("key = {}", key);
+        logger.error(stmt.getQuery());
+        logger.error("key = {}", key);
+        logger.error("fields = {}", fields);
         for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-          logger.debug("{} = {}", entry.getKey(), entry.getValue());
+          logger.error("{} = {}", entry.getKey(), entry.getValue());
         }
       }
-
+      Iterator<String> it = fields.iterator();
+      int index = 0;
+      Object[] vals = new String[fields.size() + 1];
+      while(it.hasNext()) {
+        String field = it.next();
+        vals[index++] = values.get(field).toString();
+      }
+      vals[index] = key;
+      BoundStatement boundStmt = stmt.bind(vals);
+      ResultSet rs = session.execute(boundStmt);
       return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error updating key: {}", key).getMessage(), e);
