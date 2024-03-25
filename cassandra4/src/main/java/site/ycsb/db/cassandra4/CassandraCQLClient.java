@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.helpers.MessageFormatter;
 import site.ycsb.*;
 
+import java.net.InetSocketAddress;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
@@ -131,6 +132,7 @@ public class CassandraCQLClient extends DB {
             REQUEST_TIMEOUT_MILLIS_PROPERTY);
         String requestConsistency = getProperties().getProperty(REQUEST_CONSISTENCY_LEVEL_PROPERTY,
             DefaultConsistencyLevel.QUORUM.name());
+
         boolean initDefaultTable = Boolean.parseBoolean(getProperties().getProperty("cassandra.initDefaultTable",
             "true"));
         boolean useSecureBundle = Boolean.parseBoolean(getProperties().getProperty("cassandra.useSecureBundle",
@@ -158,7 +160,10 @@ public class CassandraCQLClient extends DB {
               .withConfigLoader(loader.build())
               .build();
         } else {
+          String host = getProperties().getProperty("cassandra.host");
+          int port = Integer.parseInt(getProperties().getProperty("cassandra.port"));
           session = CqlSession.builder()
+              .addContactPoint(new InetSocketAddress(host, port))
               .withAuthCredentials(username, password)
               .withKeyspace(keyspace)
               .withConfigLoader(loader.build())

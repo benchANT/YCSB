@@ -28,6 +28,10 @@ driver](https://docs.datastax.com/en/developer/java-driver/4.3/).
 
   - Default value is `ycsb`
 
+* `cassandra.host`
+* `cassandra.port`
+  - The hostname and port of the Cassandra instance. This is only used if there is no SecureBundle 
+  
 - `cassandra.username`
 - `cassandra.password`
   - Optional user name and password for authentication. 
