@@ -17,9 +17,10 @@ LICENSE file.
 
 # Apache Cassandra 4.x CQL binding
 
-Binding for [Datastax AstraDB](https://www.datastax.com/), using the Java driver
-via the [DataStax
-driver](https://docs.datastax.com/en/developer/java-driver/4.3/).
+Binding for [Apache Cassandra](https://cassandra.apache.org/_/index.html) and [Datastax AstraDB](https://www.datastax.com/), using the version `4.13.0` of the [Datastax Java driver](https://docs.datastax.com/en/developer/java-driver/4.13/).
+
+The binding is tested against:
+- Datastax AstraDB ✔️
 
 ## Cassandra Configuration Parameters
 
