@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License. See accompanying LICENSE file.
  * <p>
- * Submitted by Chrisjan Matser on 10/11/2010.
+ * Submitted by Kevin Maier on 25/03/2024.
  */
 package site.ycsb.db.cassandra4;
 
@@ -91,6 +91,8 @@ public class CassandraCQLClient extends DB {
       "cassandra.connecttimeoutmillis";
   public static final String REQUEST_TIMEOUT_MILLIS_PROPERTY =
       "cassandra.requesttimeoutmillis";
+  public static final String REQUEST_CONSISTENCY_LEVEL_PROPERTY =
+      "cassandra.requestconsistencylevel";
 
   /**
    * Count the number of times initialized to teardown on the last
@@ -119,7 +121,7 @@ public class CassandraCQLClient extends DB {
       try {
         String username = getProperties().getProperty(USERNAME_PROPERTY);
         String password = getProperties().getProperty(PASSWORD_PROPERTY);
-        int fieldCount = Integer.parseInt(getProperties().getProperty("fieldcount"));
+        int fieldCount = Integer.parseInt(getProperties().getProperty("cassandra.table.columns"), 10);
         String path = getProperties().getProperty("cassandra.path");
         String keyspace = getProperties().getProperty(KEYSPACE_PROPERTY,
             KEYSPACE_PROPERTY_DEFAULT);
@@ -129,9 +131,12 @@ public class CassandraCQLClient extends DB {
             CONNECT_TIMEOUT_MILLIS_PROPERTY);
         String requestTimoutMillis = getProperties().getProperty(
             REQUEST_TIMEOUT_MILLIS_PROPERTY);
+        String requestConsistency = getProperties().getProperty(REQUEST_CONSISTENCY_LEVEL_PROPERTY, DefaultConsistencyLevel.QUORUM.name());
+        boolean initDefaultTable = Boolean.parseBoolean(getProperties().getProperty("cassandra.initDefaultTable", "true"));
+        boolean useSecureBundle = Boolean.parseBoolean(getProperties().getProperty("cassandra.useSecureBundle", "true"));
         //TODO: Check, if there is an equivalent for setCoreConnectionsPerHost
         ProgrammaticDriverConfigLoaderBuilder loader = DriverConfigLoader.programmaticBuilder();
-        loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, DefaultConsistencyLevel.QUORUM.name());
+        loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, requestConsistency);
         if (connectTimoutMillis != null) {
           loader.withDuration(DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT,
               Duration.ofMillis(Integer.parseInt(connectTimoutMillis)));
@@ -144,27 +149,37 @@ public class CassandraCQLClient extends DB {
               Duration.ofMillis(Integer.parseInt(requestTimoutMillis)));
         }
 
-        session = CqlSession.builder()
-            .withCloudSecureConnectBundle(Paths.get(path))
-            .withAuthCredentials(username, password)
-            .withKeyspace(keyspace)
-            .withConfigLoader(loader.build())
-            .build();
+        if (useSecureBundle) {
+          session = CqlSession.builder()
+              .withCloudSecureConnectBundle(Paths.get(path))
+              .withAuthCredentials(username, password)
+              .withKeyspace(keyspace)
+              .withConfigLoader(loader.build())
+              .build();
+        } else {
+          session = CqlSession.builder()
+              .withAuthCredentials(username, password)
+              .withKeyspace(keyspace)
+              .withConfigLoader(loader.build())
+              .build();
+        }
 
         session.getMetadata();
         Metadata metadata = session.getMetadata();
         logger.info("Connected to cluster: {}\n",
             metadata.getClusterName());
-        StringBuilder fields = new StringBuilder();
-        for (int i = 0; i < fieldCount; i++) {
-          fields.append(", field").append(i).append(" varchar");
+        if (initDefaultTable) {
+          StringBuilder fields = new StringBuilder();
+          for (int i = 0; i < fieldCount; i++) {
+            fields.append(", field").append(i).append(" varchar");
+          }
+          fields.append(");");
+          session.execute(
+              "CREATE TABLE IF NOT EXISTS usertable (y_id varchar primary key" + fields
+          );
+          logger.info("Creating table with command: 'CREATE TABLE IF NOT EXISTS usertable (y_id varchar primary key"
+              + fields + "'");
         }
-        fields.append(");");
-        session.execute(
-            "CREATE TABLE IF NOT EXISTS usertable (y_id varchar primary key" + fields
-        );
-        logger.info("Creating table with command: 'CREATE TABLE IF NOT EXISTS usertable (y_id varchar primary key"
-            + fields + "'");
       } catch (Exception e) {
         throw new DBException(e);
       }
