@@ -41,3 +41,14 @@ The binding is tested against:
 * `cassandra.connecttimeoutmillis`
 * `cassandra.requesttimeoutmillis`
   * The connection and request timeout.
+
+* `cassandra.requestconsistencylevel`
+  - The Consistency level of the requests, default value is `QUORUM`
+
+* `cassandra.initDefaultTable`
+  - Creates the usertable if this is set to `true`, default value is `true`
+* `cassandra.table.columns`
+  - The number of columns of the default table, default value is `10`
+
+* `cassandra.useSecureBundle`
+  - Use the SecureBundle to create the session, default value is `true`
