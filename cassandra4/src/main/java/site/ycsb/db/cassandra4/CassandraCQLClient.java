@@ -28,8 +28,6 @@ import com.datastax.oss.driver.api.core.metadata.Metadata;
 import com.datastax.oss.driver.api.core.type.DataType;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
-import com.datastax.oss.driver.api.querybuilder.update.OngoingAssignment;
-import com.datastax.oss.driver.api.querybuilder.update.UpdateStart;
 import com.datastax.oss.driver.api.querybuilder.update.UpdateWithAssignments;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 
@@ -131,9 +129,12 @@ public class CassandraCQLClient extends DB {
             CONNECT_TIMEOUT_MILLIS_PROPERTY);
         String requestTimoutMillis = getProperties().getProperty(
             REQUEST_TIMEOUT_MILLIS_PROPERTY);
-        String requestConsistency = getProperties().getProperty(REQUEST_CONSISTENCY_LEVEL_PROPERTY, DefaultConsistencyLevel.QUORUM.name());
-        boolean initDefaultTable = Boolean.parseBoolean(getProperties().getProperty("cassandra.initDefaultTable", "true"));
-        boolean useSecureBundle = Boolean.parseBoolean(getProperties().getProperty("cassandra.useSecureBundle", "true"));
+        String requestConsistency = getProperties().getProperty(REQUEST_CONSISTENCY_LEVEL_PROPERTY,
+            DefaultConsistencyLevel.QUORUM.name());
+        boolean initDefaultTable = Boolean.parseBoolean(getProperties().getProperty("cassandra.initDefaultTable",
+            "true"));
+        boolean useSecureBundle = Boolean.parseBoolean(getProperties().getProperty("cassandra.useSecureBundle",
+            "true"));
         //TODO: Check, if there is an equivalent for setCoreConnectionsPerHost
         ProgrammaticDriverConfigLoaderBuilder loader = DriverConfigLoader.programmaticBuilder();
         loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, requestConsistency);
