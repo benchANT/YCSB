@@ -17,16 +17,40 @@ LICENSE file.
 
 # Apache Cassandra 4.x CQL binding
 
-Binding for [Datastax AstraDB](https://www.datastax.com/), using the Java driver
-via the [DataStax
-driver](https://docs.datastax.com/en/developer/java-driver/4.3/).
+Binding for [Apache Cassandra](https://cassandra.apache.org/_/index.html) and [Datastax AstraDB](https://www.datastax.com/), using the version `4.13.0` of the [Datastax Java driver](https://docs.datastax.com/en/developer/java-driver/4.13/).
+
+The binding is tested against:
+- Datastax AstraDB ✔️
 
 ## Cassandra Configuration Parameters
 
-- `cassandra.keyspace`
-  Keyspace name, a table with this name is automatically created if it does not exist.
+* `cassandra.keyspace`
+  Keyspace name, must match a keyspace created in advance in the target database instance
 
-  - Default value is `ycsb`
+  * Default value is `ycsb`
+
+* `cassandra.initDefaultTable`
+  * Creates the `usertable` if this is set to `true`, default value is `true`
+  * setting it to `false` allows creating a table manually with non default parameters
+    
+* `cassandra.table.columns`
+  * The number of columns of the default `usertable`, default value is `10`
+  * must match the `fieldcount` parameter of the YCSB 
+   
+* `cassandra.useSecureBundle`
+  - Use the SecureBundle to create the session, default value is `true`
+  - the secure bundle contains the `host` and `port` details to connect to the target instance 
+
+* `hosts` 
+  * Cassandra nodes to connect to.
+  * optional in case of usage of `cassandra.useSecureBundle`
+
+* `port`
+  * CQL port for communicating with Cassandra cluster.
+  * Default is `9042`
+  * optional in case of usage of `cassandra.useSecureBundle`
+
+
 
 * `cassandra.host`
 * `cassandra.port`
@@ -36,8 +60,10 @@ driver](https://docs.datastax.com/en/developer/java-driver/4.3/).
 - `cassandra.password`
   - Optional user name and password for authentication. 
 
-- `cassandra.path`
-  - The path to the connection bundle
+
+* `cassandra.path`
+  * optional for SSL/TLS connections 
+  * The path to the secure connection bundle (especially required for Datastax AstraDB)
 
 * `cassandra.maxconnections`
   * The maximum umber of concurrent connections.
@@ -48,10 +74,5 @@ driver](https://docs.datastax.com/en/developer/java-driver/4.3/).
 * `cassandra.requestconsistencylevel`
   - The Consistency level of the requests, default value is `QUORUM`
 
-* `cassandra.initDefaultTable`
-  - Creates the usertable if this is set to `true`, default value is `true`
-* `cassandra.table.columns`
-  - The number of columns of the default table, default value is `10`
 
-* `cassandra.useSecureBundle`
-  - Use the SecureBundle to create the session, default value is `true`
+
