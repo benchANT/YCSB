@@ -41,11 +41,11 @@ The binding is tested against:
   - Use the SecureBundle to create the session, default value is `true`
   - the secure bundle contains the `host` and `port` details to connect to the target instance 
 
-* `host` 
+* `cassandra.host` 
   * Cassandra node(s) to connect to, multiple nodes as comma seperated list
   * optional in case of usage of `cassandra.useSecureBundle`
 
-* `port`
+* `cassandra.port`
   * CQL port for communicating with Cassandra cluster.
   * Default is `9042`
   * optional in case of usage of `cassandra.useSecureBundle`
