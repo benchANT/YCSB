@@ -51,9 +51,15 @@ The binding is tested against:
   * optional in case of usage of `cassandra.useSecureBundle`
 
 
-* `cassandra.username`
-* `cassandra.password`
-  * Optional user name and password for authentication. 
+
+* `cassandra.host`
+* `cassandra.port`
+  - The hostname and port of the Cassandra instance. This is only used if there is no SecureBundle 
+  
+- `cassandra.username`
+- `cassandra.password`
+  - Optional user name and password for authentication. 
+
 
 * `cassandra.path`
   * optional for SSL/TLS connections 
