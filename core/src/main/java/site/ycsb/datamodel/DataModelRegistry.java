@@ -16,7 +16,9 @@
  */
 package site.ycsb.datamodel;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public enum DataModelRegistry {
@@ -33,6 +35,17 @@ public enum DataModelRegistry {
     }
     public DataModelEntry getField(String name) {
         return fields.get(name);
+    }
+    public List<DataModelEntry> findSiFields() {
+        List<DataModelEntry> result = new ArrayList<>();
+        for(String key : fields.keySet()) {
+            DataModelEntry value = fields.get(key);
+            if(value == null) continue;
+            if(value.isSecondaryIndex()) {
+                result.add(value);
+            }
+        }
+        return result;
     }
     private final Map<String, DataModelEntry> fields = new HashMap<>();
 }

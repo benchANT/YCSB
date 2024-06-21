@@ -1,0 +1,25 @@
+threads=1
+as.namespace=ycsb
+as.host=localhost
+as.port=3000
+as.user=admin
+as.password=admin
+workload=site.ycsb.workloads.CoreWorkload
+maxexecutiontime=300
+recordcount=1000000000
+operationcount=999900000
+target 12500
+fieldcount=10
+fieldlength=100
+requestdistribution=uniform
+insertorder=ordered
+readproportion=0.0
+updateproportion=1.0
+insertproportion=0.0
+scanproportion=0.0
+maxscanlength=1000
+scanlengthdistribution=uniform
+core_workload_insertion_retry_limit=3
+core_workload_insertion_retry_interval=3
+measurementtype=hdrhistogram
+debug=true

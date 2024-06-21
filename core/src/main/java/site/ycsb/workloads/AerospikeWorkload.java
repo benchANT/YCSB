@@ -17,9 +17,7 @@
 package site.ycsb.workloads;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -28,14 +26,11 @@ import site.ycsb.ByteIterator;
 import site.ycsb.DB;
 import site.ycsb.IAerospikeQueryDB;
 import site.ycsb.NumericByteIterator;
-import site.ycsb.Status;
 import site.ycsb.Utils;
 import site.ycsb.WorkloadException;
 import site.ycsb.datamodel.DataModelRegistry;
 import site.ycsb.datamodel.DataType;
-import site.ycsb.generator.DiscreteGenerator;
 import site.ycsb.generator.NumberGenerator;
-import site.ycsb.generator.UniformLongGenerator;
 
 
 public final class AerospikeWorkload extends CoreWorkload {
@@ -189,8 +184,11 @@ public final class AerospikeWorkload extends CoreWorkload {
     case "SCAN":
       throw new UnsupportedOperationException("scan currently not supported");
     case "QUERY":
-        doTransactionQuery(db);
-        break;
+      doTransactionQuery(db);
+      break;
+    case "DELETE":
+      doTransactionDelete(db);
+      break;
     default:
         throw new UnsupportedOperationException("no default operation available");
     }
