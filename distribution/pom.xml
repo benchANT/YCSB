@@ -66,6 +66,11 @@ LICENSE file.
     </dependency>
     <dependency>
       <groupId>site.ycsb</groupId>
+      <artifactId>cassandra4-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>site.ycsb</groupId>
       <artifactId>cloudspanner-binding</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -79,6 +84,11 @@ LICENSE file.
       <artifactId>couchbase2-binding</artifactId>
       <version>${project.version}</version>
 		</dependency>
+    <dependency>
+      <groupId>site.ycsb</groupId>
+      <artifactId>couchbase3-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>crail-binding</artifactId>
