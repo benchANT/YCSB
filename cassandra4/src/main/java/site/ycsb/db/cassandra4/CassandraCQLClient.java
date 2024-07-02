@@ -120,7 +120,7 @@ public class CassandraCQLClient extends DB {
       try {
         String username = getProperties().getProperty(USERNAME_PROPERTY);
         String password = getProperties().getProperty(PASSWORD_PROPERTY);
-        int fieldCount = Integer.parseInt(getProperties().getProperty("cassandra.table.columns",10));
+        int fieldCount = Integer.parseInt(getProperties().getProperty("cassandra.table.columns","10"));
         String path = getProperties().getProperty("cassandra.path");
         String keyspace = getProperties().getProperty(KEYSPACE_PROPERTY,
             KEYSPACE_PROPERTY_DEFAULT);
