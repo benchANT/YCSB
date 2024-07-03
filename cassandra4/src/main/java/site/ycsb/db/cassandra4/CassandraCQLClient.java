@@ -81,6 +81,10 @@ public class CassandraCQLClient extends DB {
   public static final String KEYSPACE_PROPERTY_DEFAULT = "ycsb";
   public static final String USERNAME_PROPERTY = "cassandra.username";
   public static final String PASSWORD_PROPERTY = "cassandra.password";
+  public static final String HOSTS_PROPERTY = "hosts";
+  public static final String PORT_PROPERTY = "port";
+  public static final String PORT_PROPERTY_DEFAULT = "9042";
+
 
   public static final String MAX_CONNECTIONS_PROPERTY =
       "cassandra.maxconnections";
@@ -160,8 +164,8 @@ public class CassandraCQLClient extends DB {
               .withConfigLoader(loader.build())
               .build();
         } else {
-          String host = getProperties().getProperty("cassandra.host");
-          int port = Integer.parseInt(getProperties().getProperty("cassandra.port"));
+          String host = getProperties().getProperty(HOSTS_PROPERTY);
+          int port = Integer.valueOf(getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT));
           session = CqlSession.builder()
               .addContactPoint(new InetSocketAddress(host, port))
               .withAuthCredentials(username, password)
