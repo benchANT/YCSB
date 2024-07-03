@@ -46,6 +46,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Cassandra 2.x CQL client.
@@ -165,9 +167,17 @@ public class CassandraCQLClient extends DB {
               .build();
         } else {
           String host = getProperties().getProperty(HOSTS_PROPERTY);
+          if (host == null) {
+            throw new DBException(String.format(
+                "Required property \"%s\" missing for CassandraCQLClient",
+                HOSTS_PROPERTY));
+          }
+          String[] hosts = host.split(",");
           int port = Integer.valueOf(getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT));
+          List<InetSocketAddress> contactPoints = Stream.of(hosts)
+          .map(x -> new InetSocketAddress(x, port)).collect(Collectors.toList());
           session = CqlSession.builder()
-              .addContactPoint(new InetSocketAddress(host, port))
+              .addContactPoints(contactPoints)
               .withAuthCredentials(username, password)
               .withKeyspace(keyspace)
               .withConfigLoader(loader.build())
