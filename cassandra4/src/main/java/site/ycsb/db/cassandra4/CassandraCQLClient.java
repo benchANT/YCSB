@@ -126,7 +126,7 @@ public class CassandraCQLClient extends DB {
       try {
         String username = getProperties().getProperty(USERNAME_PROPERTY);
         String password = getProperties().getProperty(PASSWORD_PROPERTY);
-        int fieldCount = Integer.parseInt(getProperties().getProperty("cassandra.table.columns","10"));
+        int fieldCount = Integer.parseInt(getProperties().getProperty("cassandra.table.columns", "10"));
         String path = getProperties().getProperty("cassandra.path");
         String keyspace = getProperties().getProperty(KEYSPACE_PROPERTY,
             KEYSPACE_PROPERTY_DEFAULT);
@@ -175,7 +175,7 @@ public class CassandraCQLClient extends DB {
           String[] hosts = host.split(",");
           int port = Integer.valueOf(getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT));
           List<InetSocketAddress> contactPoints = Stream.of(hosts)
-          .map(x -> new InetSocketAddress(x, port)).collect(Collectors.toList());
+              .map(x -> new InetSocketAddress(x, port)).collect(Collectors.toList());
          
           session = CqlSession.builder()
               .addContactPoints(contactPoints)
