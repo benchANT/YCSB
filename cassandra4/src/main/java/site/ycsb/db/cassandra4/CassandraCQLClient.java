@@ -176,8 +176,10 @@ public class CassandraCQLClient extends DB {
           int port = Integer.valueOf(getProperties().getProperty(PORT_PROPERTY, PORT_PROPERTY_DEFAULT));
           List<InetSocketAddress> contactPoints = Stream.of(hosts)
           .map(x -> new InetSocketAddress(x, port)).collect(Collectors.toList());
+         
           session = CqlSession.builder()
               .addContactPoints(contactPoints)
+              .withLocalDatacenter("datacenter1")
               .withAuthCredentials(username, password)
               .withKeyspace(keyspace)
               .withConfigLoader(loader.build())
