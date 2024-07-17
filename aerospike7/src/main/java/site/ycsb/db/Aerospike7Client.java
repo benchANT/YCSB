@@ -26,6 +26,9 @@ import com.aerospike.client.policy.ClientPolicy;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
+import com.aerospike.client.policy.QueryPolicy;
+import com.aerospike.client.policy.BatchPolicy;
+import com.aerospike.client.policy.BatchWritePolicy;
 import site.ycsb.ByteArrayByteIterator;
 import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
@@ -49,11 +52,14 @@ public class Aerospike7Client extends site.ycsb.DB {
   private String namespace = null;
 
   private AerospikeClient client = null;
+  /** The batch size to use for inserts. */
+  private static int batchSize;
 
-  private Policy readPolicy = new Policy();
-  private WritePolicy insertPolicy = new WritePolicy();
-  private WritePolicy updatePolicy = new WritePolicy();
-  private WritePolicy deletePolicy = new WritePolicy();
+  private final Policy readPolicy = new Policy();
+  private final BatchWritePolicy batchInsertPolicy = new BatchWritePolicy();
+  private final WritePolicy insertPolicy = new WritePolicy();
+  private final WritePolicy updatePolicy = new WritePolicy();
+  private final WritePolicy deletePolicy = new WritePolicy();
 
   @Override
   public void init() throws DBException {
@@ -68,8 +74,7 @@ public class Aerospike7Client extends site.ycsb.DB {
     String user = props.getProperty("as.user");
     String password = props.getProperty("as.password");
     int port = Integer.parseInt(props.getProperty("as.port", DEFAULT_PORT));
-    int timeout = Integer.parseInt(props.getProperty("as.timeout",
-        DEFAULT_TIMEOUT));
+    int timeout = Integer.parseInt(props.getProperty("as.timeout", DEFAULT_TIMEOUT));
 
     readPolicy.totalTimeout = timeout;
     insertPolicy.totalTimeout = timeout;
@@ -90,6 +95,8 @@ public class Aerospike7Client extends site.ycsb.DB {
       throw new DBException(String.format("Error while creating Aerospike " +
           "client for %s:%d.", host, port), e);
     }
+    batchSize = Integer.parseInt(props.getProperty("batchsize", "1"));
+    System.err.println("Aerospike binding: use batch size: " + batchSize);
   }
 
   @Override
@@ -112,7 +119,7 @@ public class Aerospike7Client extends site.ycsb.DB {
 
       if (record == null) {
         System.err.println("Record key " + key + " not found (read)");
-        return Status.ERROR;
+        return Status.NOT_FOUND;
       }
 
       for (Map.Entry<String, Object> entry: record.bins.entrySet()) {
@@ -131,7 +138,7 @@ public class Aerospike7Client extends site.ycsb.DB {
   public Status scan(String table, String start, int count, Set<String> fields,
       Vector<HashMap<String, ByteIterator>> result) {
     System.err.println("Scan not implemented");
-    return Status.ERROR;
+    return Status.NOT_IMPLEMENTED;
   }
 
   private Status write(String table, String key, WritePolicy writePolicy,
@@ -155,6 +162,10 @@ public class Aerospike7Client extends site.ycsb.DB {
     }
   }
 
+  private Status batchInsert(String table, String key, BatchWritePolicy batchWritePolicy) {
+    
+  }
+
   @Override
   public Status update(String table, String key,
                        Map<String, ByteIterator> values) {
@@ -164,7 +175,11 @@ public class Aerospike7Client extends site.ycsb.DB {
   @Override
   public Status insert(String table, String key,
                        Map<String, ByteIterator> values) {
-    return write(table, key, insertPolicy, values);
+    if(batchSize > 1) {
+      return batchInsert(table, key, batchInsertPolicy);
+    } else {
+      return write(table, key, insertPolicy, values);
+    }
   }
 
   @Override
@@ -172,7 +187,7 @@ public class Aerospike7Client extends site.ycsb.DB {
     try {
       if (!client.delete(deletePolicy, new Key(namespace, table, key))) {
         System.err.println("Record key " + key + " not found (delete)");
-        return Status.ERROR;
+        return Status.NOT_FOUND;
       }
 
       return Status.OK;
