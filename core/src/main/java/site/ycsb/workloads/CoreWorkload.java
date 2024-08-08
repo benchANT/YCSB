@@ -19,11 +19,12 @@ package site.ycsb.workloads;
 
 import site.ycsb.*;
 import site.ycsb.generator.*;
-import site.ycsb.generator.UniformLongGenerator;
 import site.ycsb.measurements.Measurements;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
@@ -88,7 +89,7 @@ public class CoreWorkload extends Workload {
    */
   public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
   
-  private List<String> fieldnames;
+  protected final List<String> fieldnames = new ArrayList<>();
 
   /**
    * The name of the property for the field length distribution. Options are "uniform", "zipfian"
@@ -358,7 +359,7 @@ public class CoreWorkload extends Workload {
 
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
-  protected NumberGenerator keychooser;
+  protected volatile NumberGenerator keychooser;
   protected NumberGenerator fieldchooser;
   protected AcknowledgedCounterGenerator transactioninsertkeysequence;
   protected NumberGenerator scanlength;
@@ -368,6 +369,14 @@ public class CoreWorkload extends Workload {
   protected int zeropadding;
   protected int insertionRetryLimit;
   protected int insertionRetryInterval;
+  protected long insertstart;
+  protected boolean growKeyChooser = false;
+  private final AtomicInteger localCount = new AtomicInteger();
+  private final ThreadLocal<Long> myId = ThreadLocal.withInitial(new Supplier<Long>() {
+    @Override public Long get() {
+      return Long.valueOf(localCount.getAndIncrement());
+    };
+  });
 
   private Measurements measurements = Measurements.getMeasurements();
 
@@ -425,7 +434,7 @@ public class CoreWorkload extends Workload {
     fieldcount =
         Long.parseLong(p.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
     final String fieldnameprefix = p.getProperty(FIELD_NAME_PREFIX, FIELD_NAME_PREFIX_DEFAULT);
-    fieldnames = new ArrayList<>();
+    fieldnames.clear();
     for (int i = 0; i < fieldcount; i++) {
       fieldnames.add(fieldnameprefix + i);
     }
@@ -445,7 +454,7 @@ public class CoreWorkload extends Workload {
     String scanlengthdistrib =
         p.getProperty(SCAN_LENGTH_DISTRIBUTION_PROPERTY, SCAN_LENGTH_DISTRIBUTION_PROPERTY_DEFAULT);
 
-    long insertstart =
+    insertstart =
         Long.parseLong(p.getProperty(INSERT_START_PROPERTY, INSERT_START_PROPERTY_DEFAULT));
     long insertcount= Long.parseLong(p.getProperty(INSERT_COUNT_PROPERTY, String.valueOf(recordcount - insertstart)));
     // Confirm valid values for insertstart and insertcount in relation to recordcount
@@ -453,6 +462,8 @@ public class CoreWorkload extends Workload {
       System.err.println("Invalid combination of insertstart, insertcount and recordcount.");
       System.err.println("recordcount must be bigger than insertstart + insertcount.");
       System.exit(-1);
+    } else {
+      System.err.println("insertstart, insertcount, recordcount: " + insertstart + ", " + insertcount + ", " + recordcount);
     }
     zeropadding =
         Integer.parseInt(p.getProperty(ZERO_PADDING_PROPERTY, ZERO_PADDING_PROPERTY_DEFAULT));
@@ -483,6 +494,7 @@ public class CoreWorkload extends Workload {
     } else {
       orderedinserts = true;
     }
+    System.err.println("CoreWorkload init --- orderedinserts: " + orderedinserts);
 
     keysequence = new CounterGenerator(insertstart);
     operationchooser = createOperationGenerator(p);
@@ -490,6 +502,9 @@ public class CoreWorkload extends Workload {
     transactioninsertkeysequence = new AcknowledgedCounterGenerator(recordcount);
     if (requestdistrib.compareTo("uniform") == 0) {
       keychooser = new UniformLongGenerator(insertstart, insertstart + insertcount - 1);
+    } else if (requestdistrib.compareTo("uniform-growing") == 0) {
+      keychooser = new GrowingUniformLongGenerator(insertstart, insertstart + insertcount - 1);
+      growKeyChooser = true;
     } else if (requestdistrib.compareTo("exponential") == 0) {
       double percentile = Double.parseDouble(p.getProperty(
           ExponentialGenerator.EXPONENTIAL_PERCENTILE_PROPERTY,
@@ -549,7 +564,7 @@ public class CoreWorkload extends Workload {
   /**
    * Builds a value for a randomly chosen field.
    */
-  private HashMap<String, ByteIterator> buildSingleValue(String key) {
+  protected HashMap<String, ByteIterator> buildSingleValue(long keyVal, String key) {
     HashMap<String, ByteIterator> value = new HashMap<>();
 
     String fieldkey = fieldnames.get(fieldchooser.nextValue().intValue());
@@ -568,7 +583,7 @@ public class CoreWorkload extends Workload {
   /**
    * Builds values for all fields.
    */
-  private HashMap<String, ByteIterator> buildValues(String key) {
+  protected HashMap<String, ByteIterator> buildValues(long keyVal, String key) {
     HashMap<String, ByteIterator> values = new HashMap<>();
 
     for (String fieldkey : fieldnames) {
@@ -610,9 +625,9 @@ public class CoreWorkload extends Workload {
    */
   @Override
   public boolean doInsert(DB db, Object threadstate) {
-    int keynum = keysequence.nextValue().intValue();
+    long keynum = keysequence.nextValue().longValue();
     String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
-    HashMap<String, ByteIterator> values = buildValues(dbkey);
+    HashMap<String, ByteIterator> values = buildValues(keynum, dbkey);
 
     Status status;
     int numOfRetries = 0;
@@ -708,11 +723,15 @@ public class CoreWorkload extends Workload {
     long keynum;
     if (keychooser instanceof ExponentialGenerator) {
       do {
-        keynum = transactioninsertkeysequence.lastValue() - keychooser.nextValue().intValue();
+        keynum = transactioninsertkeysequence.lastValue() - keychooser.nextValue().longValue();
       } while (keynum < 0);
     } else {
       do {
-        keynum = keychooser.nextValue().intValue();
+        keynum = keychooser.nextValue().longValue();
+        final long last = transactioninsertkeysequence.lastValue();
+        if(keynum > last) {
+          System.err.println("chose '" + keynum + "' but last is lower: '" + last + "'");
+        }
       } while (keynum > transactioninsertkeysequence.lastValue());
     }
     return keynum;
@@ -765,16 +784,14 @@ public class CoreWorkload extends Workload {
 
     if (writeallfields) {
       // new data for all the fields
-      values = buildValues(keyname);
+      values = buildValues(keynum, keyname);
     } else {
       // update a random field
-      values = buildSingleValue(keyname);
+      values = buildSingleValue(keynum, keyname);
     }
 
     // do the transaction
-
     HashMap<String, ByteIterator> cells = new HashMap<String, ByteIterator>();
-
 
     long ist = measurements.getIntendedStartTimeNs();
     long st = System.nanoTime();
@@ -824,13 +841,49 @@ public class CoreWorkload extends Workload {
 
     if (writeallfields) {
       // new data for all the fields
-      values = buildValues(keyname);
+      values = buildValues(keynum, keyname);
     } else {
       // update a random field
-      values = buildSingleValue(keyname);
+      values = buildSingleValue(keynum, keyname);
     }
 
     db.update(table, keyname, values);
+  }
+
+  /*
+  private static final long SLIDE_KEY_INTERVAL = 100000;
+  private long slideKeyIntervals = 0;
+   */
+
+  private void updateKeychooser(long latestKey) {
+    if(growKeyChooser == false) {
+      // System.err.println("GROW: growKeyChosser is false: not updating key");
+      return;
+    } 
+
+    Long hurz = myId.get();
+    if(hurz == null) {
+      throw new IllegalStateException();
+    }
+    if(hurz != 0) {
+      // only first thread proceeds
+      // everyone else, go home
+      // System.err.println("GROW: growKeyChosser is true, but I am wrong thread.");
+      return;
+    }
+
+    GrowingNumberGenerator g = (GrowingNumberGenerator) keychooser;
+    g.updateUpperBound(latestKey);
+    /*
+    final long insertedElements = latestKey - recordcount;
+    final long updateGeneration = insertedElements / SLIDE_KEY_INTERVAL;
+    System.err.println("NEED TO UPDATE KEYCHOOSER? " + insertedElements + " / " + updateGeneration + " / " + slideKeyIntervals);
+    if(updateGeneration > slideKeyIntervals) {
+      slideKeyIntervals = updateGeneration;
+      keychooser = new UniformLongGenerator(insertstart, latestKey);
+      System.err.println("UPDATED KEYCHOOSER to new upper bound: " + latestKey);
+    }
+    */
   }
 
   public void doTransactionInsert(DB db) {
@@ -840,11 +893,12 @@ public class CoreWorkload extends Workload {
     try {
       String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
 
-      HashMap<String, ByteIterator> values = buildValues(dbkey);
+      HashMap<String, ByteIterator> values = buildValues(keynum, dbkey);
       db.insert(table, dbkey, values);
     } finally {
       transactioninsertkeysequence.acknowledge(keynum);
     }
+    updateKeychooser(keynum);
   }
 
   /**

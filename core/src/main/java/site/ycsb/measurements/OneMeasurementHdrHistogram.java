@@ -128,14 +128,14 @@ public class OneMeasurementHdrHistogram extends OneMeasurement {
     // also export totalHistogram
     if (verbose) {
       for (HistogramIterationValue v : totalHistogram.recordedValues()) {
-        int value;
-        if (v.getValueIteratedTo() > (long)Integer.MAX_VALUE) {
+        long value = v.getValueIteratedTo();
+        /*if (v.getValueIteratedTo() > (long)Integer.MAX_VALUE) {
           value = Integer.MAX_VALUE;
         } else {
           value = (int)v.getValueIteratedTo();
-        }
+        }*/
   
-        exporter.write(getName(), Integer.toString(value), (double)v.getCountAtValueIteratedTo());
+        exporter.write(getName(), Long.toString(value), (double)v.getCountAtValueIteratedTo());
       }
     }
   }
