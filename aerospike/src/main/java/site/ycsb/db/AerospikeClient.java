@@ -70,10 +70,10 @@ public class AerospikeClient extends site.ycsb.DB {
     int timeout = Integer.parseInt(props.getProperty("as.timeout",
         DEFAULT_TIMEOUT));
 
-    readPolicy.timeout = timeout;
-    insertPolicy.timeout = timeout;
-    updatePolicy.timeout = timeout;
-    deletePolicy.timeout = timeout;
+    readPolicy.totalTimeout = timeout;
+    insertPolicy.totalTimeout = timeout;
+    updatePolicy.totalTimeout = timeout;
+    deletePolicy.totalTimeout = timeout;
 
     ClientPolicy clientPolicy = new ClientPolicy();
 
