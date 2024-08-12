@@ -24,11 +24,18 @@
  */
 package site.ycsb.db;
 
-import com.allanbank.mongodb.MongoDbUri;
-import com.mongodb.ReadConcern;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.ReadPreference;
+import com.mongodb.ServerApi;
+import com.mongodb.ServerApiVersion;
 import com.mongodb.WriteConcern;
-import com.mongodb.client.*;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
+import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.InsertManyOptions;
 import com.mongodb.client.model.ReplaceOptions;
 import com.mongodb.client.model.UpdateOneModel;
@@ -190,8 +197,7 @@ public class MongoDbClient extends DB {
         url = "mongodb://localhost:27017/ycsb?w=1";
       }
 
-      url = OptionsSupport.updateUrl(url, props);
-
+      /*
       if (!url.startsWith("mongodb://") && !url.startsWith("mongodb+srv://")) {
         System.err.println("ERROR: Invalid URL: '" + url
             + "'. Must be of the form "
@@ -200,35 +206,42 @@ public class MongoDbClient extends DB {
             + "http://docs.mongodb.org/manual/reference/connection-string/");
         System.exit(1);
       }
+      */
 
       try {
-        MongoDbUri uri = new MongoDbUri(url);
-
-        String uriDb = uri.getDatabase();
+        ConnectionString cString = new ConnectionString(url);
+        readPreference = cString.getReadPreference();
+        writeConcern = cString.getWriteConcern();
+        if(readPreference == null) {
+          System.err.println("Read Preference not set: using " + ReadPreference.primary());
+          readPreference = ReadPreference.primary();
+        }
+        if(writeConcern == null) {
+          System.err.println("Write Concern not set: using " + WriteConcern.JOURNALED);
+          writeConcern = WriteConcern.JOURNALED;
+        }
+        String uriDb = cString.getDatabase();
         if (!defaultedUrl && (uriDb != null) && !uriDb.isEmpty()
             && !"admin".equals(uriDb)) {
           databaseName = uriDb;
         } else {
           // If no database is specified in URI, use "ycsb"
           databaseName = "ycsb";
-
         }
-        readPreference = ReadPreference.valueOf("PRIMARY");
-        writeConcern = WriteConcern.MAJORITY;
-        if (url.contains("readPreference")) {
-          readPreference = ReadPreference.valueOf(uri.getValuesFor("readPreference").get(0));
-        }
-        if (url.contains("writeConcern")) {
-          writeConcern = WriteConcern.valueOf(uri.getValuesFor("writeConcern").get(0));
-        }
-
-        mongoClient = MongoClients.create(url);
+        ServerApi serverApi = ServerApi.builder()
+                .version(ServerApiVersion.V1)
+                .build();
+        MongoClientSettings settings = MongoClientSettings.builder()
+                .applyConnectionString(cString)
+                .serverApi(serverApi)
+                .build();
+        mongoClient = MongoClients.create(settings);
         database =
             mongoClient.getDatabase(databaseName)
                 .withReadPreference(readPreference)
                 .withWriteConcern(writeConcern);
 
-        System.out.println("mongo client connection created with " + url);
+        System.out.println("mongo client connection created with '" + url + "'");
       } catch (Exception e1) {
         System.err
             .println("Could not initialize MongoDB connection pool for Loader: "
