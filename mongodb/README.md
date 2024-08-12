@@ -121,39 +121,6 @@ bin/ycsb run mongodb -jvm-args="-Dlogback.configurationFile=/path/to/logback.xml
   - Setting to `true` uses updates, `false` uses insert operations.
   - Default value is `false`.
 
-- `mongodb.writeConcern`
-  - **Deprecated** - Use the `w` and `journal` options on the MongoDB URI provided by the `mongodb.url`.
-  - Allowed values are :
-    - `errors_ignored`
-    - `unacknowledged`
-    - `acknowledged`
-    - `journaled`
-    - `replica_acknowledged`
-    - `majority`
-  - Default value is `acknowledged`.
- 
-- `mongodb.readPreference`
-  - **Deprecated** - Use the `readPreference` options on the MongoDB URI provided by the `mongodb.url`.
-  - Allowed values are :
-    - `primary`
-    - `primary_preferred`
-    - `secondary`
-    - `secondary_preferred`
-    - `nearest`
-  - Default value is `primary`.
- 
-- `mongodb.maxconnections`
-  - **Deprecated** - Use the `maxPoolSize` options on the MongoDB URI provided by the `mongodb.url`.
-  - Default value is `100`.
-
-- `mongodb.threadsAllowedToBlockForConnectionMultiplier`
-  - **Deprecated** - Use the `waitQueueMultiple` options on the MongoDB URI provided by the `mongodb.url`.
-  - Default value is `5`.
-
-For example:
-
-    ./bin/ycsb load mongodb-async -s -P workloads/workloada -p mongodb.url=mongodb://localhost:27017/ycsb?w=0
-
 To run with the synchronous driver from MongoDB Inc.:
 
     ./bin/ycsb load mongodb -s -P workloads/workloada -p mongodb.url=mongodb://localhost:27017/ycsb?w=0
