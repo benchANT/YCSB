@@ -257,7 +257,7 @@ public class BasicDB extends DB implements IAerospikeQueryDB {
       if (values != null) {
         for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
           DataModelEntry fieldMeta = DataModelRegistry.INSTANCE.getField(entry.getKey());
-          if(fieldMeta.isNumeric()){
+          if(fieldMeta != null && fieldMeta.isNumeric()){
             NumericByteIterator bi = (NumericByteIterator) entry.getValue();
             sb.append(entry.getKey()).append("=").append(bi.getLong()).append(" ");
           } else {
