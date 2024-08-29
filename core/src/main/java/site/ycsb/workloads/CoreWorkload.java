@@ -453,6 +453,8 @@ public class CoreWorkload extends Workload {
       System.err.println("Invalid combination of insertstart, insertcount and recordcount.");
       System.err.println("recordcount must be bigger than insertstart + insertcount.");
       System.exit(-1);
+    } else {
+      System.err.println("insertstart, insertcount, recordcount: " + insertstart + ", " + insertcount + ", " + recordcount);
     }
     zeropadding =
         Integer.parseInt(p.getProperty(ZERO_PADDING_PROPERTY, ZERO_PADDING_PROPERTY_DEFAULT));
@@ -483,6 +485,7 @@ public class CoreWorkload extends Workload {
     } else {
       orderedinserts = true;
     }
+    System.err.println("CoreWorkload init --- orderedinserts: " + orderedinserts);
 
     keysequence = new CounterGenerator(insertstart);
     operationchooser = createOperationGenerator(p);
@@ -713,6 +716,10 @@ public class CoreWorkload extends Workload {
     } else {
       do {
         keynum = keychooser.nextValue().longValue();
+        final long last = transactioninsertkeysequence.lastValue();
+        if(keynum > last) {
+          System.err.println("chose '" + keynum + "' but last is lower: '" + last + "'");
+        }
       } while (keynum > transactioninsertkeysequence.lastValue());
     }
     return keynum;
