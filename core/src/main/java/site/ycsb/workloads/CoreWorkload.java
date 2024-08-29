@@ -708,11 +708,11 @@ public class CoreWorkload extends Workload {
     long keynum;
     if (keychooser instanceof ExponentialGenerator) {
       do {
-        keynum = transactioninsertkeysequence.lastValue() - keychooser.nextValue().intValue();
+        keynum = transactioninsertkeysequence.lastValue() - keychooser.nextValue().longValue();
       } while (keynum < 0);
     } else {
       do {
-        keynum = keychooser.nextValue().intValue();
+        keynum = keychooser.nextValue().longValue();
       } while (keynum > transactioninsertkeysequence.lastValue());
     }
     return keynum;
