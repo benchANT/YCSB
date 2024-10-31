@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2014, Yahoo!, Inc. All rights reserved.
+/**
+ * Copyright (c) 2015 YCSB contributors. All rights reserved.
  * Copyright (c) 2024 benchANT GmbH. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you
@@ -17,8 +17,6 @@
  */
 
 /**
- * The YCSB binding for <a href="http://cassandra.apache.org/">Cassandra</a> 
- * 4.0+ via CQL.
+ * YCSB binding for <a href="http://www.aerospike.com/">Areospike</a>.
  */
-package site.ycsb.db.cassandra4;
-
+package site.ycsb.db;

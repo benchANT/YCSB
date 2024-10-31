@@ -17,8 +17,6 @@
 
 package site.ycsb;
 
-import java.util.Map;
-
 import site.ycsb.measurements.Measurements;
 import org.apache.htrace.core.TraceScope;
 import org.apache.htrace.core.Tracer;
@@ -30,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Wrapper around a "real" DB that measures latencies and counts return codes.
  * Also reports latency separately between OK and failed operations.
  */
-public class DBWrapper extends DB {
+public class DBWrapper extends DB implements IAerospikeQueryDB {
   private final DB db;
   private final Measurements measurements;
   private final Tracer tracer;
@@ -47,6 +45,7 @@ public class DBWrapper extends DB {
 
   private final String scopeStringCleanup;
   private final String scopeStringDelete;
+  private final String scopeStringQuery;
   private final String scopeStringInit;
   private final String scopeStringInsert;
   private final String scopeStringRead;
@@ -65,6 +64,7 @@ public class DBWrapper extends DB {
     scopeStringRead = simple + "#read";
     scopeStringScan = simple + "#scan";
     scopeStringUpdate = simple + "#update";
+    scopeStringQuery = simple + "#query";
   }
 
   /**
@@ -247,6 +247,18 @@ public class DBWrapper extends DB {
       long en = System.nanoTime();
       measure("DELETE", res, ist, st, en);
       measurements.reportStatus("DELETE", res);
+      return res;
+    }
+  }
+
+  public final Status query(String table, Map<String, ByteIterator> fields, List<Map<String, ByteIterator>> result) {
+    try (final TraceScope span = tracer.newScope(scopeStringQuery)) {
+      long ist = measurements.getIntendedStartTimeNs();
+      long st = System.nanoTime();
+      Status res = ((IAerospikeQueryDB) db).query(table, fields, result);
+      long en = System.nanoTime();
+      measure("QUERY", res, ist, st, en);
+      measurements.reportStatus("QUERY", res);
       return res;
     }
   }
