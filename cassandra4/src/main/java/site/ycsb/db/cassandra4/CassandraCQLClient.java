@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2013-2015 YCSB contributors. All rights reserved.
+ * Copyright (c) 2024 benchANT GmbH. All rights reserved.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -13,41 +14,70 @@
  * License for the specific language governing permissions and limitations under
  * the License. See accompanying LICENSE file.
  * <p>
- * Submitted by Kevin Maier on 25/03/2024.
- */
+  */
 package site.ycsb.db.cassandra4;
 
-
-import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
-import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
-import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
-import com.datastax.oss.driver.api.core.config.ProgrammaticDriverConfigLoaderBuilder;
-import com.datastax.oss.driver.api.core.cql.*;
-import com.datastax.oss.driver.api.core.metadata.Metadata;
-import com.datastax.oss.driver.api.core.type.DataType;
-import com.datastax.oss.driver.api.core.type.DataTypes;
-import com.datastax.oss.driver.api.querybuilder.select.Select;
-import com.datastax.oss.driver.api.querybuilder.update.UpdateWithAssignments;
-import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
-
-import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.*;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.helpers.MessageFormatter;
-import site.ycsb.*;
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.deleteFrom;
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.insertInto;
+import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.selectFrom;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.helpers.MessageFormatter;
+
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
+import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.config.ProgrammaticDriverConfigLoaderBuilder;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.ColumnDefinition;
+import com.datastax.oss.driver.api.core.cql.ColumnDefinitions;
+import com.datastax.oss.driver.api.core.cql.ExecutionInfo;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.QueryTrace;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import com.datastax.oss.driver.api.core.cql.TraceEvent;
+import com.datastax.oss.driver.api.core.metadata.Metadata;
+import com.datastax.oss.driver.api.core.type.DataType;
+import com.datastax.oss.driver.api.core.type.DataTypes;
+import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
+import com.datastax.oss.driver.api.querybuilder.delete.Delete;
+import com.datastax.oss.driver.api.querybuilder.insert.RegularInsert;
+import com.datastax.oss.driver.api.querybuilder.select.Select;
+import com.datastax.oss.driver.api.querybuilder.update.UpdateWithAssignments;
+
+import site.ycsb.ByteIterator;
+import site.ycsb.DB;
+import site.ycsb.DBException;
+import site.ycsb.IAerospikeQueryDB;
+import site.ycsb.NumericByteIterator;
+import site.ycsb.Status;
+import site.ycsb.StringByteIterator;
+import site.ycsb.datamodel.DataModelEntry;
+import site.ycsb.datamodel.DataModelRegistry;
 
 /**
  * Cassandra 2.x CQL client.
@@ -56,7 +86,7 @@ import java.util.stream.Stream;
  *
  * @author cmatser
  */
-public class CassandraCQLClient extends DB {
+public class CassandraCQLClient extends DB implements IAerospikeQueryDB {
 
   private static Logger logger = LoggerFactory.getLogger(CassandraCQLClient.class);
 
@@ -70,6 +100,8 @@ public class CassandraCQLClient extends DB {
   private static ConcurrentMap<Set<String>, PreparedStatement> insertStmts =
       new ConcurrentHashMap<Set<String>, PreparedStatement>();
   private static ConcurrentMap<Set<String>, PreparedStatement> updateStmts =
+      new ConcurrentHashMap<Set<String>, PreparedStatement>();
+  private static ConcurrentMap<Set<String>, PreparedStatement> queryStmts =
       new ConcurrentHashMap<Set<String>, PreparedStatement>();
   private static AtomicReference<PreparedStatement> readAllStmt =
       new AtomicReference<PreparedStatement>();
@@ -87,23 +119,35 @@ public class CassandraCQLClient extends DB {
   public static final String PORT_PROPERTY = "port";
   public static final String PORT_PROPERTY_DEFAULT = "9042";
 
-
-  public static final String MAX_CONNECTIONS_PROPERTY =
-      "cassandra.maxconnections";
-  public static final String CORE_CONNECTIONS_PROPERTY =
-      "cassandra.coreconnections";
+  public static final String MAX_REQUESTS_PER_CONNECTION_PROPERTY =
+      "cassandra.maxrequestsperconnection";
+  public static final String MAX_CONNECTIONS_PER_NODE_PROPERTY =
+      "cassandra.maxconnectionspernode";
+  public static final String THREADS_PER_IO_GROUP_PROPERTY =
+      "cassandra.threadsperiogroup";
   public static final String CONNECT_TIMEOUT_MILLIS_PROPERTY =
       "cassandra.connecttimeoutmillis";
   public static final String REQUEST_TIMEOUT_MILLIS_PROPERTY =
       "cassandra.requesttimeoutmillis";
-  public static final String REQUEST_CONSISTENCY_LEVEL_PROPERTY =
-      "cassandra.requestconsistencylevel";
-
+  public static final String READ_CONSISTENCY_LEVEL_PROPERTY =
+      "cassandra.readconsistencylevel";
+  public static final String WRITE_CONSISTENCY_LEVEL_PROPERTY =
+      "cassandra.writeconsistencylevel";
+  public static final String USE_ALLOW_FILTERING =
+      "cassandra.useallowfiltering";
+  public static final String TRACING_PROPERTY = "cassandra.tracing";
+  public static final String TRACING_PROPERTY_DEFAULT = "false";
+  
   /**
    * Count the number of times initialized to teardown on the last
    * {@link #cleanup()}.
    */
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
+  private static ConsistencyLevel readConsistency = null;
+  private static ConsistencyLevel writeConsistency = null;
+  private static String keyspace = null;
+  private static boolean useAllowFiltering = false;
+  private static boolean doTrace = false;
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
@@ -124,36 +168,57 @@ public class CassandraCQLClient extends DB {
         return;
       }
       try {
+        // debug = Boolean.parseBoolean(getProperties().getProperty("debug", "false"));
+        doTrace = Boolean.valueOf(getProperties().getProperty(TRACING_PROPERTY, TRACING_PROPERTY_DEFAULT));
         String username = getProperties().getProperty(USERNAME_PROPERTY);
         String password = getProperties().getProperty(PASSWORD_PROPERTY);
         int fieldCount = Integer.parseInt(getProperties().getProperty("cassandra.table.columns", "10"));
         String path = getProperties().getProperty("cassandra.path");
-        String keyspace = getProperties().getProperty(KEYSPACE_PROPERTY,
-            KEYSPACE_PROPERTY_DEFAULT);
-        String maxConnections = getProperties().getProperty(
-            MAX_CONNECTIONS_PROPERTY);
+        keyspace = getProperties().getProperty(KEYSPACE_PROPERTY, KEYSPACE_PROPERTY_DEFAULT);
+        String maxRequestsPerConnection = getProperties().getProperty(MAX_REQUESTS_PER_CONNECTION_PROPERTY);
+        String maxConnectionsPerNode = getProperties().getProperty(MAX_CONNECTIONS_PER_NODE_PROPERTY);
+        String threadsPerIoGroup = getProperties().getProperty(THREADS_PER_IO_GROUP_PROPERTY);
         String connectTimoutMillis = getProperties().getProperty(
             CONNECT_TIMEOUT_MILLIS_PROPERTY);
         String requestTimoutMillis = getProperties().getProperty(
             REQUEST_TIMEOUT_MILLIS_PROPERTY);
-        String requestConsistency = getProperties().getProperty(REQUEST_CONSISTENCY_LEVEL_PROPERTY,
+        String stringReadConsistency = getProperties().getProperty(READ_CONSISTENCY_LEVEL_PROPERTY,
             DefaultConsistencyLevel.QUORUM.name());
-
+        logger.info("setting read (and default) Consistency to '" + stringReadConsistency + "'");
+        String stringWriteConsistency = getProperties().getProperty(WRITE_CONSISTENCY_LEVEL_PROPERTY,
+            DefaultConsistencyLevel.QUORUM.name());
+        logger.info("setting write Consistency to '" + stringWriteConsistency + "'");
+        writeConsistency = DefaultConsistencyLevel.valueOf(stringWriteConsistency);
+        readConsistency = DefaultConsistencyLevel.valueOf(stringReadConsistency);
+        useAllowFiltering = Boolean.parseBoolean(getProperties().getProperty(USE_ALLOW_FILTERING, "false"));
         boolean initDefaultTable = Boolean.parseBoolean(getProperties().getProperty("cassandra.initDefaultTable",
             "true"));
         boolean useSecureBundle = Boolean.parseBoolean(getProperties().getProperty("cassandra.useSecureBundle",
             "true"));
         //TODO: Check, if there is an equivalent for setCoreConnectionsPerHost
         ProgrammaticDriverConfigLoaderBuilder loader = DriverConfigLoader.programmaticBuilder();
-        loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, requestConsistency);
+        loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, stringReadConsistency);
         if (connectTimoutMillis != null) {
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT + "' to '" + connectTimoutMillis + "'");
           loader.withDuration(DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT,
               Duration.ofMillis(Integer.parseInt(connectTimoutMillis)));
         }
-        if (maxConnections != null) {
-          loader.withInt(DefaultDriverOption.CONNECTION_MAX_REQUESTS, Integer.parseInt(maxConnections));
+        if (maxRequestsPerConnection != null) {
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_MAX_REQUESTS + "' to '" + maxRequestsPerConnection + "'");
+          loader.withInt(DefaultDriverOption.CONNECTION_MAX_REQUESTS, Integer.parseInt(maxRequestsPerConnection));
+        }
+        if (maxConnectionsPerNode != null) {
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE + "' to '" + maxConnectionsPerNode + "'");
+          loader.withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE, Integer.parseInt(maxConnectionsPerNode));
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE + "' to '" + maxConnectionsPerNode + "'");
+          loader.withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE, Integer.parseInt(maxConnectionsPerNode));
+        }
+        if(threadsPerIoGroup != null) {
+          logger.info("setting '" + DefaultDriverOption.NETTY_IO_SIZE + "' to '" + threadsPerIoGroup + "'");
+          loader.withInt(DefaultDriverOption.NETTY_IO_SIZE, Integer.parseInt(threadsPerIoGroup));
         }
         if (requestTimoutMillis != null) {
+          logger.info("setting '" + DefaultDriverOption.REQUEST_TIMEOUT + "' to '" + requestTimoutMillis + "'");
           loader.withDuration(DefaultDriverOption.REQUEST_TIMEOUT,
               Duration.ofMillis(Integer.parseInt(requestTimoutMillis)));
         }
@@ -259,44 +324,40 @@ public class CassandraCQLClient extends DB {
         } else {
           query = selectFrom(table).columns(fields.toArray(new String[fields.size()]));
         }
-        query = query.whereColumn(YCSB_KEY).isEqualTo(bindMarker());
-        query.limit(1);
-        stmt = session.prepare(query.build());
-        // TODO: Tracing does not exist any more?
+        query = query.whereColumn(YCSB_KEY).isEqualTo(bindMarker()).limit(1);
+        SimpleStatement ss = query.build().setConsistencyLevel(readConsistency).setTracing(doTrace);
+        stmt = session.prepare(ss);
+
         PreparedStatement prevStmt = (fields == null)
                               ? readAllStmt.getAndSet(stmt)
-                              : readStmts.putIfAbsent(new HashSet(fields), stmt);
+                              : readStmts.putIfAbsent(new HashSet<>(fields), stmt);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
       }
-      logger.debug(stmt.getQuery());
-      logger.debug("key = {}", key);
-
+      
+      if(logger.isDebugEnabled()) {
+        logger.debug(stmt.getQuery());
+        logger.debug("key = {}", key);
+      }
       ResultSet rs = session.execute(stmt.bind(key));
+      if(doTrace){
+        traceResultSet(rs);
+      }
       // Should be only 1 row
       Row row = rs.one();
       if (row == null) {
         return Status.NOT_FOUND;
       }
-      ColumnDefinitions cds = rs.getColumnDefinitions();
-      for(ColumnDefinition c : cds) {
-        DataType myType = c.getType();
-        if(DataTypes.TEXT.equals(myType)) {
-          String cName = c.getName().toString();
-          String value = row.getString(cName);
-          result.put(cName, new StringByteIterator(value));
-        } else {
-          logger.error("unexpected type: " + myType);
-          return Status.ERROR;
-        }        
+      if(logger.isDebugEnabled()) {
+        logger.debug("read row: " + row.getFormattedContents());
       }
+      readRowByColumn(rs, row, result);
       return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error reading key: {}", key).getMessage(), e);
       return Status.ERROR;
     }
-
   }
 
   /**
@@ -342,15 +403,17 @@ public class CassandraCQLClient extends DB {
       // Prepare statement on demand
       if (stmt == null) {
         Iterator<String> it = fields.iterator();
-        UpdateWithAssignments updateQuery = QueryBuilder.update(table).setColumn(it.next(), bindMarker());
+        String firstField = it.next();
+        UpdateWithAssignments updateQuery = QueryBuilder.update(table).setColumn(firstField, bindMarker(firstField));
         // Add fields
         while (it.hasNext()) {
-          updateQuery = updateQuery.setColumn(it.next(), bindMarker());
+          String field = it.next();
+          updateQuery = updateQuery.setColumn(field, bindMarker(field));
         }
-        stmt = session.prepare(
-          updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker()).build()
-        );
-        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), stmt);
+        SimpleStatement ss = updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker(YCSB_KEY)).build()
+          .setConsistencyLevel(writeConsistency).setTracing(doTrace);
+        stmt = session.prepare(ss);
+        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet<>(fields), stmt);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
@@ -363,16 +426,21 @@ public class CassandraCQLClient extends DB {
           logger.error("{} = {}", entry.getKey(), entry.getValue());
         }
       }
+      BoundStatement boundStmt = stmt.bind().setString(YCSB_KEY, key);
       Iterator<String> it = fields.iterator();
-      int index = 0;
-      Object[] vals = new String[fields.size() + 1];
       while(it.hasNext()) {
         String field = it.next();
-        vals[index++] = values.get(field).toString();
+        DataModelEntry fieldMeta = DataModelRegistry.INSTANCE.getField(field);
+        if(fieldMeta != null && fieldMeta.isNumeric()){
+          boundStmt = boundStmt.setLong(field, ((NumericByteIterator) values.get(field)).getLong());
+        } else {
+          boundStmt = boundStmt.setString(field, values.get(field).toString());
+        }
       }
-      vals[index] = key;
-      BoundStatement boundStmt = stmt.bind(vals);
       ResultSet rs = session.execute(boundStmt);
+      if(doTrace){
+        traceResultSet(rs);
+      }
       return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error updating key: {}", key).getMessage(), e);
@@ -395,41 +463,105 @@ public class CassandraCQLClient extends DB {
   public Status insert(String table, String key, Map<String, ByteIterator> values) {
 
     try {
-      Set<String> fields = values.keySet();
-
+      List<String> fields = new ArrayList<String>(values.keySet());
+      Set<String> statementKey = new HashSet<>(fields);
+      PreparedStatement stmt = insertStmts.get(statementKey);
+      if(stmt == null) {
+        RegularInsert insert = insertInto(keyspace, table).value(YCSB_KEY, bindMarker(YCSB_KEY));
+        for(String field: fields) {
+          insert = insert.value(field, bindMarker(field));
+        }
+        SimpleStatement ss = insert.build().setConsistencyLevel(writeConsistency).setTracing(doTrace);
+        PreparedStatement ps = session.prepare(ss);
+        PreparedStatement prevStmt = insertStmts.putIfAbsent(new HashSet<>(fields), ps);
+        if(prevStmt != null) {
+          stmt = prevStmt;
+        } else {
+          stmt = ps;
+        }
+      }
       // Add fields
-      StringBuilder fieldsString = new StringBuilder();
-      StringBuilder placeHolders = new StringBuilder("?");
-      for (int i = 0; i < fields.size(); i++) {
-        fieldsString.append(", ").append("field").append(i);
-        placeHolders.append(", ?");
-      }
-      PreparedStatement ps = session.prepare(String.format(
-          "INSERT INTO " + table + " (y_id" + fieldsString + ") VALUES (" + placeHolders + ")")
-      );
-      PreparedStatement prevStmt = insertStmts.putIfAbsent(new HashSet(fields), ps);
-      if (prevStmt != null) {
-        ps = prevStmt;
-      }
       if (logger.isDebugEnabled()) {
-        logger.debug(ps.getQuery());
+        logger.debug(stmt.getQuery());
         logger.debug("key = {}", key);
         for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
           logger.debug("{} = {}", entry.getKey(), entry.getValue());
         }
       }
-      BoundStatement boundStmt = ps.bind().setString(0, key);
-      for (int i = 0; i < fields.size(); i++) {
-        boundStmt.setString(i + 1, values.get("field" + i).toString());
+      BoundStatement boundStmt = stmt.bind().setString(YCSB_KEY, key);
+      for(String field: fields) {
+        DataModelEntry fieldMeta = DataModelRegistry.INSTANCE.getField(field);
+        if(fieldMeta != null && fieldMeta.isNumeric()){
+          boundStmt = boundStmt.setLong(field, ((NumericByteIterator) values.get(field)).getLong());
+        } else {
+          boundStmt = boundStmt.setString(field, values.get(field).toString());
+        }
       }
-      session.execute(boundStmt);
-
+      ResultSet rs = session.execute(boundStmt);
+      if(doTrace){
+        traceResultSet(rs);
+      }
       return Status.OK;
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error inserting key: {}", key).getMessage(), e);
     }
-
     return Status.ERROR;
+  }
+
+  @Override
+  public final Status query(String table, Map<String, ByteIterator> fields, List<Map<String, ByteIterator>> result) {
+    try {
+      PreparedStatement stmt = queryStmts.get(fields.keySet());
+      if(stmt == null) {
+        Select query;
+        query = selectFrom(table).all();
+        for(String ky : fields.keySet()) {
+          query = query.whereColumn(ky).isEqualTo(bindMarker(ky));
+        }
+        query = query.limit(MAX_QUERY_LIMIT);
+        if(useAllowFiltering) {
+          query = query.allowFiltering();
+        }
+        SimpleStatement ss = query.build().setConsistencyLevel(readConsistency).setTracing(doTrace);
+        stmt = session.prepare(ss);
+        PreparedStatement prevStmt = queryStmts.putIfAbsent(fields.keySet(), stmt);
+        if (prevStmt != null) {
+          stmt = prevStmt;
+        }
+      }
+      if(logger.isDebugEnabled()) {
+        logger.debug(stmt.getQuery());
+        logger.debug("fields = {}", fields);
+      }
+      BoundStatement bound = stmt.bind();
+      for(String ky : fields.keySet()) {
+        DataModelEntry fieldMeta = DataModelRegistry.INSTANCE.getField(ky);
+        if(fieldMeta != null && fieldMeta.isNumeric()){
+          bound = bound.setLong(ky, ((NumericByteIterator) fields.get(ky)).getLong());
+        } else {
+          bound = bound.setString(ky, fields.get(ky).toString());
+        }
+      }
+      
+      ResultSet rs = session.execute(bound);
+      if(doTrace){
+        traceResultSet(rs);
+      }
+      Iterator<Row> irow = rs.iterator();
+      while(irow.hasNext()) {
+        Row row = irow.next();
+        Map<String,ByteIterator> rowResults = new HashMap<>();
+        readRowByColumn(rs, row, rowResults);
+        result.add(rowResults);
+      }
+      if(result.isEmpty()) {
+        return Status.NOT_FOUND;
+      }
+      return Status.OK;
+    } catch(Exception e) {
+      logger.error(MessageFormatter.format("Error querying key: {}", fields.keySet()).getMessage(), e);
+      return Status.ERROR;
+    }
   }
 
   /**
@@ -441,7 +573,61 @@ public class CassandraCQLClient extends DB {
    */
   @Override
   public Status delete(String table, String key) {
-    return Status.NOT_IMPLEMENTED;
+    try {
+      PreparedStatement stmt = deleteStmt.get();
+      // Prepare statement on demand
+      if (stmt == null) {
+        Delete query = deleteFrom(table).whereColumn(YCSB_KEY).isEqualTo(bindMarker());
+        SimpleStatement ss = query.build().setConsistencyLevel(writeConsistency).setTracing(doTrace);
+        stmt = session.prepare(ss);
+        boolean b = deleteStmt.compareAndSet(null, stmt);
+        if (!b) {
+          stmt = deleteStmt.get();
+        }
+      }
+      ResultSet rs = session.execute(stmt.bind(key));
+      if(doTrace){
+        traceResultSet(rs);
+      }
+      // Should be only 1 row
+      Row row = rs.one();
+      /* if (row == null) {
+        return Status.NOT_FOUND;
+      }*/
+      return Status.OK;
+    } catch (Exception e) {
+      logger.error(MessageFormatter.format("Error deleting key: {}", key).getMessage(), e);
+      return Status.ERROR;
+    }
   }
 
+  private void readRowByColumn(ResultSet rs, Row row, Map<String, ByteIterator> result) {
+    ColumnDefinitions cds = rs.getColumnDefinitions();
+    for(ColumnDefinition c : cds) {
+      DataType myType = c.getType();
+      String cName = c.getName().toString();
+      if(DataTypes.TEXT.equals(myType)) {
+        String value = row.getString(cName);
+        result.put(cName, new StringByteIterator(value));
+      } else if(DataTypes.BIGINT.equals(myType)) {
+        long value = row.getLong(cName);
+        result.put(cName, new NumericByteIterator(value));
+      } else {
+        throw new IllegalStateException("unexpected type: " + myType);
+      }
+    }
+  }
+
+  private void traceResultSet(ResultSet rs){
+    List<ExecutionInfo> infos = rs.getExecutionInfos();
+    for(ExecutionInfo info : infos) {
+      QueryTrace qt = info.getQueryTrace();
+      if(qt == null) continue;
+      logger.info("'%s' to %s took %dμs%n", qt.getRequestType(), qt.getCoordinatorAddress(), qt.getDurationMicros());
+      logger.info("Parameters {}", qt.getParameters());
+      for (TraceEvent event : qt.getEvents()) {
+        logger.info("   %d - %s - %s%n", event.getSourceElapsedMicros(), event.getSourceAddress(), event.getActivity());
+      }
+    }
+  }
 }

@@ -17,17 +17,28 @@
 
 package site.ycsb;
 
-import java.util.*;
-import java.util.Map.Entry;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.Vector;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
+import site.ycsb.datamodel.DataModelEntry;
+import site.ycsb.datamodel.DataModelRegistry;
+
 /**
  * Basic DB that just prints out the requested operations, instead of doing them against a database.
  */
-public class BasicDB extends DB {
+public class BasicDB extends DB implements IAerospikeQueryDB {
   public static final String COUNT = "basicdb.count";
   public static final String COUNT_DEFAULT = "false";
   
@@ -47,6 +58,7 @@ public class BasicDB extends DB {
   protected static Map<Integer, Integer> updates;
   protected static Map<Integer, Integer> inserts;
   protected static Map<Integer, Integer> deletes;
+  protected static Map<Integer, Integer> queries;
   
   protected boolean verbose;
   protected boolean randomizedelay;
@@ -106,6 +118,7 @@ public class BasicDB extends DB {
         updates = new HashMap<Integer, Integer>();
         inserts = new HashMap<Integer, Integer>();
         deletes = new HashMap<Integer, Integer>();
+        queries = new HashMap<Integer, Integer>();
       }
       counter++;
     }
@@ -243,7 +256,13 @@ public class BasicDB extends DB {
       sb.append("INSERT ").append(table).append(" ").append(key).append(" [ ");
       if (values != null) {
         for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-          sb.append(entry.getKey()).append("=").append(entry.getValue()).append(" ");
+          DataModelEntry fieldMeta = DataModelRegistry.INSTANCE.getField(entry.getKey());
+          if(fieldMeta != null && fieldMeta.isNumeric()){
+            NumericByteIterator bi = (NumericByteIterator) entry.getValue();
+            sb.append(entry.getKey()).append("=").append(bi.getLong()).append(" ");
+          } else {
+            sb.append(entry.getKey()).append("=").append(entry.getValue()).append(" ");
+          }
         }
       }
 
@@ -283,6 +302,28 @@ public class BasicDB extends DB {
   }
 
   @Override
+  public final Status query(String table, Map<String, ByteIterator> fields, List<Map<String, ByteIterator>> result) {
+    delay();
+
+    if (verbose) {
+      Map<String, Long> parsedField = new HashMap<>();
+      StringBuilder sb = getStringBuilder();
+      for(String k : fields.keySet()) {
+        long val = ((NumericByteIterator) fields.get(k)).getLong();
+        parsedField.put(k, val);
+      }
+      sb.append("QUERY ").append(table).append(" ").append(parsedField);
+      System.out.println(sb);
+    }
+
+    if (count) {
+      incCounter(queries, (table + fields).hashCode());
+    }
+    
+    return Status.OK;
+  }
+
+  @Override
   public void cleanup() {
     synchronized (MUTEX) {
       int countDown = --counter;
@@ -294,6 +335,7 @@ public class BasicDB extends DB {
         System.out.println("[UPDATES], Uniques, " + updates.size());
         System.out.println("[INSERTS], Uniques, " + inserts.size());
         System.out.println("[DELETES], Uniques, " + deletes.size());
+        System.out.println("[QUERIES], Uniques, " + queries.size());
       }
     }
   }

@@ -88,7 +88,7 @@ public class CoreWorkload extends Workload {
    */
   public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
   
-  private List<String> fieldnames;
+  protected final List<String> fieldnames = new ArrayList<>();
 
   /**
    * The name of the property for the field length distribution. Options are "uniform", "zipfian"
@@ -199,6 +199,16 @@ public class CoreWorkload extends Workload {
    * be set to true during loading phase to function.
    */
   private boolean dataintegrity;
+
+  /**
+   * The name of the property for the proportion of transactions that are reads.
+   */
+  public static final String DELETE_PROPORTION_PROPERTY = "deleteproportion";
+
+  /**
+   * The default proportion of transactions that are reads.
+   */
+  public static final String DELETE_PROPORTION_PROPERTY_DEFAULT = "0.0";
 
   /**
    * The name of the property for the proportion of transactions that are reads.
@@ -425,7 +435,7 @@ public class CoreWorkload extends Workload {
     fieldcount =
         Long.parseLong(p.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
     final String fieldnameprefix = p.getProperty(FIELD_NAME_PREFIX, FIELD_NAME_PREFIX_DEFAULT);
-    fieldnames = new ArrayList<>();
+    fieldnames.clear();
     for (int i = 0; i < fieldcount; i++) {
       fieldnames.add(fieldnameprefix + i);
     }
@@ -552,7 +562,7 @@ public class CoreWorkload extends Workload {
   /**
    * Builds a value for a randomly chosen field.
    */
-  private HashMap<String, ByteIterator> buildSingleValue(String key) {
+  protected HashMap<String, ByteIterator> buildSingleValue(long keyVal, String key) {
     HashMap<String, ByteIterator> value = new HashMap<>();
 
     String fieldkey = fieldnames.get(fieldchooser.nextValue().intValue());
@@ -571,7 +581,7 @@ public class CoreWorkload extends Workload {
   /**
    * Builds values for all fields.
    */
-  private HashMap<String, ByteIterator> buildValues(String key) {
+  protected HashMap<String, ByteIterator> buildValues(long keyVal, String key) {
     HashMap<String, ByteIterator> values = new HashMap<>();
 
     for (String fieldkey : fieldnames) {
@@ -615,7 +625,7 @@ public class CoreWorkload extends Workload {
   public boolean doInsert(DB db, Object threadstate) {
     long keynum = keysequence.nextValue().longValue();
     String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
-    HashMap<String, ByteIterator> values = buildValues(dbkey);
+    HashMap<String, ByteIterator> values = buildValues(keynum, dbkey);
 
     Status status;
     int numOfRetries = 0;
@@ -775,16 +785,14 @@ public class CoreWorkload extends Workload {
 
     if (writeallfields) {
       // new data for all the fields
-      values = buildValues(keyname);
+      values = buildValues(keynum, keyname);
     } else {
       // update a random field
-      values = buildSingleValue(keyname);
+      values = buildSingleValue(keynum, keyname);
     }
 
     // do the transaction
-
     HashMap<String, ByteIterator> cells = new HashMap<String, ByteIterator>();
-
 
     long ist = measurements.getIntendedStartTimeNs();
     long st = System.nanoTime();
@@ -834,10 +842,10 @@ public class CoreWorkload extends Workload {
 
     if (writeallfields) {
       // new data for all the fields
-      values = buildValues(keyname);
+      values = buildValues(keynum, keyname);
     } else {
       // update a random field
-      values = buildSingleValue(keyname);
+      values = buildSingleValue(keynum, keyname);
     }
 
     db.update(table, keyname, values);
@@ -850,11 +858,19 @@ public class CoreWorkload extends Workload {
     try {
       String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
 
-      HashMap<String, ByteIterator> values = buildValues(dbkey);
+      HashMap<String, ByteIterator> values = buildValues(keynum, dbkey);
       db.insert(table, dbkey, values);
     } finally {
       transactioninsertkeysequence.acknowledge(keynum);
     }
+  }
+
+  public void doTransactionDelete(DB db) {
+    // choose a random key
+    long keynum = nextKeynum();
+
+    String keyname = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
+    db.delete(table, keyname);
   }
 
   /**
@@ -881,7 +897,8 @@ public class CoreWorkload extends Workload {
         p.getProperty(SCAN_PROPORTION_PROPERTY, SCAN_PROPORTION_PROPERTY_DEFAULT));
     final double readmodifywriteproportion = Double.parseDouble(p.getProperty(
         READMODIFYWRITE_PROPORTION_PROPERTY, READMODIFYWRITE_PROPORTION_PROPERTY_DEFAULT));
-
+    final double deleteproportion = Double.parseDouble(p.getProperty(
+        DELETE_PROPORTION_PROPERTY, DELETE_PROPORTION_PROPERTY_DEFAULT));
     final DiscreteGenerator operationchooser = new DiscreteGenerator();
     if (readproportion > 0) {
       operationchooser.addValue(readproportion, "READ");
@@ -901,6 +918,10 @@ public class CoreWorkload extends Workload {
 
     if (readmodifywriteproportion > 0) {
       operationchooser.addValue(readmodifywriteproportion, "READMODIFYWRITE");
+    }
+
+    if (deleteproportion > 0) {
+      operationchooser.addValue(deleteproportion, "DELETE");
     }
     return operationchooser;
   }
