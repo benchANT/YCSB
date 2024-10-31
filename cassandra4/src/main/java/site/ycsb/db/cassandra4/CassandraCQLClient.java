@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2013-2015 YCSB contributors. All rights reserved.
+ * Copyright (c) 2024 benchANT GmbH. All rights reserved.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -13,11 +14,10 @@
  * License for the specific language governing permissions and limitations under
  * the License. See accompanying LICENSE file.
  * <p>
- * Submitted by Kevin Maier on 25/03/2024.
- */
+  */
 package site.ycsb.db.cassandra4;
 
-
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
@@ -30,6 +30,8 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.datastax.oss.driver.api.querybuilder.update.UpdateWithAssignments;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
+import com.datastax.oss.driver.api.querybuilder.delete.Delete;
+import com.datastax.oss.driver.api.querybuilder.delete.DeleteSelection;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.*;
 
@@ -88,22 +90,28 @@ public class CassandraCQLClient extends DB {
   public static final String PORT_PROPERTY_DEFAULT = "9042";
 
 
-  public static final String MAX_CONNECTIONS_PROPERTY =
-      "cassandra.maxconnections";
-  public static final String CORE_CONNECTIONS_PROPERTY =
-      "cassandra.coreconnections";
+  public static final String MAX_REQUESTS_PER_CONNECTION_PROPERTY =
+      "cassandra.maxrequestsperconnection";
+  public static final String MAX_CONNECTIONS_PER_NODE_PROPERTY =
+      "cassandra.maxconnectionspernode";
+  public static final String THREADS_PER_IO_GROUP_PROPERTY =
+      "cassandra.threadsperiogroup";
   public static final String CONNECT_TIMEOUT_MILLIS_PROPERTY =
       "cassandra.connecttimeoutmillis";
   public static final String REQUEST_TIMEOUT_MILLIS_PROPERTY =
       "cassandra.requesttimeoutmillis";
-  public static final String REQUEST_CONSISTENCY_LEVEL_PROPERTY =
-      "cassandra.requestconsistencylevel";
+  public static final String READ_CONSISTENCY_LEVEL_PROPERTY =
+      "cassandra.readconsistencylevel";
+  public static final String WRITE_CONSISTENCY_LEVEL_PROPERTY =
+      "cassandra.writeconsistencylevel";
 
   /**
    * Count the number of times initialized to teardown on the last
    * {@link #cleanup()}.
    */
   private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
+  private static ConsistencyLevel readConsistency = null;
+  private static ConsistencyLevel writeConsistency = null;
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
@@ -130,30 +138,49 @@ public class CassandraCQLClient extends DB {
         String path = getProperties().getProperty("cassandra.path");
         String keyspace = getProperties().getProperty(KEYSPACE_PROPERTY,
             KEYSPACE_PROPERTY_DEFAULT);
-        String maxConnections = getProperties().getProperty(
-            MAX_CONNECTIONS_PROPERTY);
+        String maxRequestsPerConnection = getProperties().getProperty(MAX_REQUESTS_PER_CONNECTION_PROPERTY);
+        String maxConnectionsPerNode = getProperties().getProperty(MAX_CONNECTIONS_PER_NODE_PROPERTY);
+        String threadsPerIoGroup = getProperties().getProperty(THREADS_PER_IO_GROUP_PROPERTY);
         String connectTimoutMillis = getProperties().getProperty(
             CONNECT_TIMEOUT_MILLIS_PROPERTY);
         String requestTimoutMillis = getProperties().getProperty(
             REQUEST_TIMEOUT_MILLIS_PROPERTY);
-        String requestConsistency = getProperties().getProperty(REQUEST_CONSISTENCY_LEVEL_PROPERTY,
+        String stringReadConsistency = getProperties().getProperty(READ_CONSISTENCY_LEVEL_PROPERTY,
             DefaultConsistencyLevel.QUORUM.name());
-
+        logger.info("setting read (and default) Consistency to '" + stringReadConsistency + "'");
+        String stringWriteConsistency = getProperties().getProperty(WRITE_CONSISTENCY_LEVEL_PROPERTY,
+            DefaultConsistencyLevel.QUORUM.name());
+        logger.info("setting write Consistency to '" + stringWriteConsistency + "'");
+        writeConsistency = DefaultConsistencyLevel.valueOf(stringWriteConsistency);
+        readConsistency = DefaultConsistencyLevel.valueOf(stringReadConsistency);
         boolean initDefaultTable = Boolean.parseBoolean(getProperties().getProperty("cassandra.initDefaultTable",
             "true"));
         boolean useSecureBundle = Boolean.parseBoolean(getProperties().getProperty("cassandra.useSecureBundle",
             "true"));
         //TODO: Check, if there is an equivalent for setCoreConnectionsPerHost
         ProgrammaticDriverConfigLoaderBuilder loader = DriverConfigLoader.programmaticBuilder();
-        loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, requestConsistency);
+        loader.withString(DefaultDriverOption.REQUEST_CONSISTENCY, stringReadConsistency);
         if (connectTimoutMillis != null) {
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT + "' to '" + connectTimoutMillis + "'");
           loader.withDuration(DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT,
               Duration.ofMillis(Integer.parseInt(connectTimoutMillis)));
         }
-        if (maxConnections != null) {
-          loader.withInt(DefaultDriverOption.CONNECTION_MAX_REQUESTS, Integer.parseInt(maxConnections));
+        if (maxRequestsPerConnection != null) {
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_MAX_REQUESTS + "' to '" + maxRequestsPerConnection + "'");
+          loader.withInt(DefaultDriverOption.CONNECTION_MAX_REQUESTS, Integer.parseInt(maxRequestsPerConnection));
+        }
+        if (maxConnectionsPerNode != null) {
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE + "' to '" + maxConnectionsPerNode + "'");
+          loader.withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE, Integer.parseInt(maxConnectionsPerNode));
+          logger.info("setting '" + DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE + "' to '" + maxConnectionsPerNode + "'");
+          loader.withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE, Integer.parseInt(maxConnectionsPerNode));
+        }
+        if(threadsPerIoGroup != null) {
+          logger.info("setting '" + DefaultDriverOption.NETTY_IO_SIZE + "' to '" + threadsPerIoGroup + "'");
+          loader.withInt(DefaultDriverOption.NETTY_IO_SIZE, Integer.parseInt(threadsPerIoGroup));
         }
         if (requestTimoutMillis != null) {
+          logger.info("setting '" + DefaultDriverOption.REQUEST_TIMEOUT + "' to '" + requestTimoutMillis + "'");
           loader.withDuration(DefaultDriverOption.REQUEST_TIMEOUT,
               Duration.ofMillis(Integer.parseInt(requestTimoutMillis)));
         }
@@ -261,18 +288,20 @@ public class CassandraCQLClient extends DB {
         }
         query = query.whereColumn(YCSB_KEY).isEqualTo(bindMarker());
         query.limit(1);
-        stmt = session.prepare(query.build());
+        SimpleStatement ss = query.build();
+        ss.setConsistencyLevel(readConsistency);
+        stmt = session.prepare(ss);
         // TODO: Tracing does not exist any more?
         PreparedStatement prevStmt = (fields == null)
                               ? readAllStmt.getAndSet(stmt)
-                              : readStmts.putIfAbsent(new HashSet(fields), stmt);
+                              : readStmts.putIfAbsent(new HashSet<>(fields), stmt);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
       }
       logger.debug(stmt.getQuery());
       logger.debug("key = {}", key);
-
+      
       ResultSet rs = session.execute(stmt.bind(key));
       // Should be only 1 row
       Row row = rs.one();
@@ -296,7 +325,6 @@ public class CassandraCQLClient extends DB {
       logger.error(MessageFormatter.format("Error reading key: {}", key).getMessage(), e);
       return Status.ERROR;
     }
-
   }
 
   /**
@@ -347,10 +375,10 @@ public class CassandraCQLClient extends DB {
         while (it.hasNext()) {
           updateQuery = updateQuery.setColumn(it.next(), bindMarker());
         }
-        stmt = session.prepare(
-          updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker()).build()
-        );
-        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet(fields), stmt);
+        SimpleStatement ss = updateQuery.whereColumn(YCSB_KEY).isEqualTo(bindMarker()).build();
+        ss.setConsistencyLevel(writeConsistency);
+        stmt = session.prepare(ss);
+        PreparedStatement prevStmt = updateStmts.putIfAbsent(new HashSet<>(fields), stmt);
         if (prevStmt != null) {
           stmt = prevStmt;
         }
@@ -404,10 +432,12 @@ public class CassandraCQLClient extends DB {
         fieldsString.append(", ").append("field").append(i);
         placeHolders.append(", ?");
       }
-      PreparedStatement ps = session.prepare(String.format(
-          "INSERT INTO " + table + " (y_id" + fieldsString + ") VALUES (" + placeHolders + ")")
+      SimpleStatement ss = SimpleStatement.newInstance(
+        String.format("INSERT INTO " + table + " (y_id" + fieldsString + ") VALUES (" + placeHolders + ")")
       );
-      PreparedStatement prevStmt = insertStmts.putIfAbsent(new HashSet(fields), ps);
+      ss.setConsistencyLevel(writeConsistency);
+      PreparedStatement ps = session.prepare(ss);
+      PreparedStatement prevStmt = insertStmts.putIfAbsent(new HashSet<>(fields), ps);
       if (prevStmt != null) {
         ps = prevStmt;
       }
@@ -428,7 +458,6 @@ public class CassandraCQLClient extends DB {
     } catch (Exception e) {
       logger.error(MessageFormatter.format("Error inserting key: {}", key).getMessage(), e);
     }
-
     return Status.ERROR;
   }
 
@@ -441,7 +470,30 @@ public class CassandraCQLClient extends DB {
    */
   @Override
   public Status delete(String table, String key) {
-    return Status.NOT_IMPLEMENTED;
-  }
+    try {
+      PreparedStatement stmt = deleteStmt.get();
 
+      // Prepare statement on demand
+      if (stmt == null) {
+        Delete query = deleteFrom(table).whereColumn(YCSB_KEY).isEqualTo(bindMarker());
+        SimpleStatement ss = query.build();
+        ss.setConsistencyLevel(writeConsistency);
+        stmt = session.prepare(ss);
+        boolean b = deleteStmt.compareAndSet(null, stmt);
+        if (!b) {
+          stmt = deleteStmt.get();
+        }
+      }
+      ResultSet rs = session.execute(stmt.bind(key));
+      // Should be only 1 row
+      Row row = rs.one();
+      if (row == null) {
+        return Status.NOT_FOUND;
+      }
+      return Status.OK;
+    } catch (Exception e) {
+      logger.error(MessageFormatter.format("Error deleting key: {}", key).getMessage(), e);
+      return Status.ERROR;
+    }
+  }
 }
