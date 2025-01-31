@@ -674,9 +674,6 @@ public class CoreWorkload extends Workload {
     case "SCAN":
       doTransactionScan(db);
       break;
-    case "DELETE":
-      doTransactionDelete(db);
-      break;
     default:
       doTransactionReadModifyWrite(db);
     }
