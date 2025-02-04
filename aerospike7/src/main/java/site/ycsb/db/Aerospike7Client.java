@@ -42,12 +42,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * YCSB binding for <a href="http://www.aerospike.com/">Areospike</a>.
  */
 public class Aerospike7Client extends site.ycsb.DB {
-  private static final Object MUTEX = new Object();
+  private static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
 
   private static final String HOSTS_PROPERTY = "as.host";
   private static final String USER_PROPERTY = "as.user";
@@ -64,6 +65,7 @@ public class Aerospike7Client extends site.ycsb.DB {
   private static final String USE_COMPRESSION_PROPERTY = "as.usecompression";
   // private static final String COMPRESSION_STRATEGY_PROPERTY = "as.compressionstrategy";
   // private static final String INSERT_STRATEGY_PROPERTY = "as.insertstrategy";
+  private static final String DEBUG_PROPERTY = "as.debug";
 
   private static final int DEFAULT_BATCH_SIZE = 0;
   private static final int DEFAULT_MAX_RETRIES = 0;
@@ -86,7 +88,8 @@ public class Aerospike7Client extends site.ycsb.DB {
   private static final BatchWritePolicy batchInsertPolicy = new BatchWritePolicy();
   private static WritePolicy insertPolicy;
   private static WritePolicy updatePolicy;
-  private static final WritePolicy deletePolicy = new WritePolicy();
+  private static WritePolicy deletePolicy;
+  private static boolean useDebug;
 
   private void initReadPolicy(Properties props) {
     readPolicy.setMaxRetries(DEFAULT_MAX_RETRIES);
@@ -114,33 +117,35 @@ public class Aerospike7Client extends site.ycsb.DB {
       System.err.println("Aerospike binding init policy: commit level " + commitLevel);
     }
     insertPolicy.setRecordExistsAction(RecordExistsAction.CREATE_ONLY);
-    System.err.println("Aerospike binding init policy: record exists action" + RecordExistsAction.CREATE_ONLY);
+    System.err.println("Aerospike binding insert policy: record exists action " + RecordExistsAction.CREATE_ONLY);
   }
 
   private void initUpdatePolicy(Properties props) {
     updatePolicy = new WritePolicy(insertPolicy);
     // insertPolicy.setRecordExistsAction(RecordExistsAction.REPLACE_ONLY);
-    insertPolicy.setRecordExistsAction(RecordExistsAction.REPLACE);
-    System.err.println("Aerospike binding update policy: record exists action" + RecordExistsAction.REPLACE);
+    // insertPolicy.setRecordExistsAction(RecordExistsAction.REPLACE);
+    updatePolicy.setRecordExistsAction(RecordExistsAction.UPDATE_ONLY);
+    System.err.println("Aerospike binding update policy: record exists action " + RecordExistsAction.UPDATE_ONLY);
   }
 
   private void initDeletePolicy(Properties props) {
-    updatePolicy = new WritePolicy(insertPolicy);
+    deletePolicy = new WritePolicy(insertPolicy);
     String durableDelete = props.getProperty(DURABLE_DELETE_PROPERTY, DEFAULT_DURABLE_DELETE_STRATEGY);
     boolean isFalse = durableDelete.toLowerCase().equals("false");
-    updatePolicy.setDurableDelete(!isFalse);
+    deletePolicy.setDurableDelete(!isFalse);
+    deletePolicy.setRecordExistsAction(RecordExistsAction.UPDATE);
     System.err.println("Aerospike binding delete policy: durable delete" + (!isFalse));
   }
 
   @Override
   public void init() throws DBException {
-    synchronized(MUTEX){
+    // Keep track of number of calls to init (for later cleanup)
+    // this is a bit of a stupid approach, but adapted from Cassandra binding
+    INIT_COUNT.incrementAndGet();
+    synchronized(INIT_COUNT){
       if(client != null) {
         return;
       }
-      insertPolicy.recordExistsAction = RecordExistsAction.CREATE_ONLY;
-      updatePolicy.recordExistsAction = RecordExistsAction.REPLACE_ONLY;
-
       Properties props = getProperties();
 
       namespace = props.getProperty(NAMESPACE_PROPERTY, DEFAULT_NAMESPACE);
@@ -156,6 +161,7 @@ public class Aerospike7Client extends site.ycsb.DB {
 
       String connectionsPerNode = props.getProperty(CONNECTIONS_PER_NODE_PROPERTY);
       String connectionPoolsPerNode = props.getProperty(CONNECTION_POOLS_PER_NODE_PROPERTY);
+      useDebug = Boolean.parseBoolean(props.getProperty(DEBUG_PROPERTY));
 
       ClientPolicy clientPolicy = new ClientPolicy();
 
@@ -190,7 +196,17 @@ public class Aerospike7Client extends site.ycsb.DB {
 
   @Override
   public void cleanup() throws DBException {
-    client.close();
+    synchronized (INIT_COUNT) {
+      final int curInitCount = INIT_COUNT.decrementAndGet();
+      if (curInitCount <= 0) {
+        client.close();
+      }
+      if (curInitCount < 0) {
+        // This should never happen.
+        throw new DBException(
+            String.format("initCount is negative: %d", curInitCount));        
+      }
+    }
   }
 
   @Override
@@ -207,7 +223,9 @@ public class Aerospike7Client extends site.ycsb.DB {
       }
 
       if (record == null) {
-        System.err.println("Record key " + key + " not found (read)");
+        if(useDebug) {
+          System.err.println("Record key " + key + " not found (read)");
+        }
         return Status.NOT_FOUND;
       }
 
@@ -275,7 +293,9 @@ public class Aerospike7Client extends site.ycsb.DB {
   public Status delete(String table, String key) {
     try {
       if (!client.delete(deletePolicy, new Key(namespace, table, key))) {
-        System.err.println("Record key " + key + " not found (delete)");
+        if(useDebug) {
+          System.err.println("Record key " + key + " not found (delete)");
+        }
         return Status.NOT_FOUND;
       }
       return Status.OK;
