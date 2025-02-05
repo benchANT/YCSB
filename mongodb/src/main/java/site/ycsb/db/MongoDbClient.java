@@ -177,7 +177,7 @@ public class MongoDbClient extends DB {
   @Override
   public void init() throws DBException {
     INIT_COUNT.incrementAndGet();
-    synchronized (INCLUDE) {
+    synchronized (MongoDbClient.class) {
       if (mongoClient != null) {
         return;
       }
