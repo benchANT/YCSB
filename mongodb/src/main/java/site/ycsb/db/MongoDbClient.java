@@ -73,6 +73,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class MongoDbClient extends DB {
 
+  public static final String DISABLE_VERSION_FIELD = "mongodb.disableVersion";
+  public static final String DISABLE_VERSION_FIELD_DEFAULT = "false";
   /** Used to include a field in a response. */
   private static final Integer INCLUDE = Integer.valueOf(1);
 
@@ -166,6 +168,8 @@ public class MongoDbClient extends DB {
     }
   }
 
+  private static boolean disableVersion;
+
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
    * DB instance per client thread.
@@ -196,7 +200,7 @@ public class MongoDbClient extends DB {
         defaultedUrl = true;
         url = "mongodb://localhost:27017/ycsb?w=1";
       }
-
+      disableVersion = Boolean.parseBoolean(props.getProperty(DISABLE_VERSION_FIELD, DISABLE_VERSION_FIELD_DEFAULT));
       /*
       if (!url.startsWith("mongodb://") && !url.startsWith("mongodb+srv://")) {
         System.err.println("ERROR: Invalid URL: '" + url
@@ -229,13 +233,15 @@ public class MongoDbClient extends DB {
           databaseName = "ycsb";
         }
         ServerApi serverApi = ServerApi.builder()
-                .version(ServerApiVersion.V1)
-                .build();
-        MongoClientSettings settings = MongoClientSettings.builder()
-                .applyConnectionString(cString)
-                .serverApi(serverApi)
-                .build();
-        mongoClient = MongoClients.create(settings);
+              .version(ServerApiVersion.V1)
+              .build();
+        MongoClientSettings.Builder sBuilder = MongoClientSettings.builder()
+                .applyConnectionString(cString);
+        if(!disableVersion) {
+          sBuilder.serverApi(serverApi);
+        }
+
+        mongoClient = MongoClients.create(sBuilder.build());
         database =
             mongoClient.getDatabase(databaseName)
                 .withReadPreference(readPreference)
