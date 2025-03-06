@@ -39,7 +39,7 @@ LICENSE file.
       <artifactId>core</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
+<!--    <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>accumulo1.9-binding</artifactId>
       <version>${project.version}</version>
@@ -48,8 +48,13 @@ LICENSE file.
       <groupId>site.ycsb</groupId>
       <artifactId>aerospike-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency>-->
     <dependency>
+      <groupId>site.ycsb</groupId>
+      <artifactId>aerospike7-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>arangodb-binding</artifactId>
       <version>${project.version}</version>
@@ -63,13 +68,13 @@ LICENSE file.
       <groupId>site.ycsb</groupId>
       <artifactId>cassandra-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency>-->
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>cassandra4-binding</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
+    <!-- <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>cloudspanner-binding</artifactId>
       <version>${project.version}</version>
@@ -273,7 +278,7 @@ LICENSE file.
       <groupId>site.ycsb</groupId>
       <artifactId>zookeeper-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency>-->
 
   </dependencies>
   <build>
