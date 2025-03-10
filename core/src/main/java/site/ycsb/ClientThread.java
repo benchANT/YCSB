@@ -37,7 +37,7 @@ public class ClientThread implements Runnable {
   private long opcount;
   private double targetOpsPerMs;
 
-  private int opsdone;
+  private long opsdone;
   private int threadid;
   private int threadcount;
   private Object workloadstate;
@@ -81,7 +81,7 @@ public class ClientThread implements Runnable {
     threadcount = threadCount;
   }
 
-  public int getOpsDone() {
+  public long getOpsDone() {
     return opsdone;
   }
 

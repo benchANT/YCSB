@@ -211,7 +211,7 @@ public final class Client {
    *
    * @throws IOException Either failed to write to output stream or failed to close it.
    */
-  private static void exportMeasurements(Properties props, int opcount, long runtime)
+  private static void exportMeasurements(Properties props, long opcount, long runtime)
       throws IOException {
     MeasurementsExporter exporter = null;
     try {
@@ -327,7 +327,7 @@ public final class Client {
     Thread terminator = null;
     long st;
     long en;
-    int opsDone;
+    long opsDone;
 
     try (final TraceScope span = tracer.newScope(CLIENT_WORKLOAD_SPAN)) {
 
