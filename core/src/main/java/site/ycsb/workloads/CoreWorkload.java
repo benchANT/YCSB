@@ -356,6 +356,9 @@ public class CoreWorkload extends Workload {
    */
   public static final String FIELD_NAME_PREFIX_DEFAULT = "field";
 
+  private static final Status nextKeyGenStatusLoop = new Status("Loop", "A key was generated, but discareded as it was too large. Key generation starting over");
+  // private final Map<Thread, AtomicLong> loopCounterMap = new HashMap<>();
+  // private final ThreadLocal<AtomicLong> loopCounter = new ThreadLocal<AtomicLong>();
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
   protected NumberGenerator keychooser;
@@ -370,6 +373,17 @@ public class CoreWorkload extends Workload {
   protected int insertionRetryInterval;
 
   private Measurements measurements = Measurements.getMeasurements();
+
+  private void recordLoopEvent() {
+    measurements.reportStatus("NEXT-KEYGEN", nextKeyGenStatusLoop);
+    /*AtomicLong oldVal = loopCounter.get();
+    if(oldVal == null) {
+      oldVal = new AtomicLong(0);
+      loopCounter.set(oldVal);
+      loopCounterMap.put(Thread.currentThread(), oldVal);
+    }
+    oldVal.incrementAndGet();*/
+  }
 
   public static String buildKeyName(long keynum, int zeropadding, boolean orderedinserts) {
     if (!orderedinserts) {
@@ -718,7 +732,8 @@ public class CoreWorkload extends Workload {
         keynum = keychooser.nextValue().longValue();
         final long last = transactioninsertkeysequence.lastValue();
         if(keynum > last) {
-          System.err.println("chose '" + keynum + "' but last is lower: '" + last + "'");
+          recordLoopEvent();
+          // System.err.println("chose '" + keynum + "' but last is lower: '" + last + "'");
         }
       } while (keynum > transactioninsertkeysequence.lastValue());
     }
