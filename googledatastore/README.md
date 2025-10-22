@@ -92,6 +92,10 @@ group of the Google Datastore.
 While in this mode, one can optionally specify a root key name. If not
 specified, a default name will be used.
 
+## Enable grpc transport for benchmarking
+By default, benchmarking tests will use gRPC transport unless `googledatastore.useGrpc` is set to false.
+Additionally, you can specify a channel provider by setting `googledatastore.useChannelProvider` to true.
+
 ## Enable tracing for benchmarking
  To enable publishing traces to Google Cloud Trace while running benchmarking tests, `googledatastore.tracingenabled` must be set.
  Tracing depends on the following external APIs/Services:
