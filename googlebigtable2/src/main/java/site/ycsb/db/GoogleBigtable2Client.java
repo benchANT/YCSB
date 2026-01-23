@@ -19,6 +19,7 @@ import com.google.api.gax.batching.Batcher;
 import com.google.api.gax.batching.BatchingException;
 import com.google.api.gax.batching.BatchingSettings;
 import com.google.api.gax.grpc.ChannelPoolSettings;
+import com.google.api.gax.rpc.ServerStream;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.BigtableDataSettings;
 import com.google.cloud.bigtable.data.v2.models.Filters;
@@ -38,13 +39,13 @@ import com.google.common.base.Strings;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
+import java.util.concurrent.TimeUnit;
 import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
 import site.ycsb.Status;
@@ -65,6 +66,10 @@ public class GoogleBigtable2Client extends site.ycsb.DB {
   private static final String INSTANCE_KEY = PROP_PREFIX + ".instance";
   private static final String APP_PROFILE_ID_KEY = PROP_PREFIX + ".app-profile";
   private static final String FAMILY_KEY = PROP_PREFIX + ".family";
+
+  private static final String MAX_SCAN_RATE = "maxscanrate";
+  private static final String SCAN_OP_TIMELIMIT = "scanoptimelimit";
+  private static final String DISCARD_SCANNED_RECORD = "discardscannedrecord";
 
   private static final String MAX_OUTSTANDING_BYTES_KEY = PROP_PREFIX + ".max-outstanding-bytes";
   private static final String CLIENT_SIDE_BUFFERING_KEY = PROP_PREFIX + ".use-batching";
@@ -96,6 +101,27 @@ public class GoogleBigtable2Client extends site.ycsb.DB {
   private static boolean clientSideBuffering = true;
   private static boolean reverseScans = false;
   private static Optional<Long> fixedTimestamp = Optional.empty();
+
+  /**
+   * The max number of records to scan per second, used to slow down the
+   * client-side consumption of scanned records when the actual scan rate
+   * is high and the scan range is large. If set zero, there is no throttling.
+   */
+  private static long maxScanRate = 0;
+
+  /**
+   * The time limit of a single scan operation (in seconds). No effect if zero.
+   * It's useful when the scan operation runs very slowly due to intended throttling.
+   * As the operation may take hours to finish, ycsb_timelimit is not well respected.
+   */
+  private static long scanOpTimelimit = 0;
+
+  /**
+   * If true, scanned record will be parsed but not kept in memory.
+   * It's useful when doing large but slow scans, so that the client
+   * doesn't hit out-of-memory issues.
+   */
+  private static boolean discardScannedRecord = false;
 
   /**
    * Thread local Bigtable native API objects.
@@ -160,6 +186,19 @@ public class GoogleBigtable2Client extends site.ycsb.DB {
         Optional.ofNullable(props.getProperty(CLIENT_SIDE_BUFFERING_KEY))
             .map(Boolean::parseBoolean)
             .orElse(true);
+
+    maxScanRate =
+        Optional.ofNullable(props.getProperty(MAX_SCAN_RATE))
+            .map(Long::parseLong)
+            .orElse(0L);
+    scanOpTimelimit =
+        Optional.ofNullable(props.getProperty(SCAN_OP_TIMELIMIT))
+            .map(Long::parseLong)
+            .orElse(0L);
+    discardScannedRecord =
+        Optional.ofNullable(props.getProperty(DISCARD_SCANNED_RECORD))
+            .map(Boolean::parseBoolean)
+            .orElse(false);
 
     reverseScans = Optional.ofNullable(props.getProperty(REVERSE_SCANS_KEY))
         .map(Boolean::parseBoolean)
@@ -278,9 +317,9 @@ public class GoogleBigtable2Client extends site.ycsb.DB {
             .range(range)
             .limit(recordcount);
 
-    final List<Row> rows;
+    ServerStream<Row> stream;
     try {
-      rows = client.readRowsCallable().all().call(query);
+      stream = client.readRowsCallable().call(query);
     } catch (Exception e) {
       if (debug) {
         e.printStackTrace();
@@ -288,10 +327,36 @@ public class GoogleBigtable2Client extends site.ycsb.DB {
       return Status.ERROR;
     }
 
-    for (Row row : rows) {
+    long rowCount = 0;
+    long opStartMillis = System.currentTimeMillis();
+    for (Row row : stream) {
+      long rowStartMillis = System.currentTimeMillis();
       HashMap<String, ByteIterator> rowResult = new HashMap<>();
       rowToMap(row, rowResult);
+
+      if (discardScannedRecord) {
+        rowResult.clear();
+      }
+
+      rowCount++;
       results.add(rowResult);
+
+      if (scanOpTimelimit > 0 &&
+          System.currentTimeMillis() - opStartMillis > scanOpTimelimit * 1000) {
+        System.out.println("Stop the scan operation after the specified per-operation time limit");
+        break;
+      }
+
+      if (maxScanRate > 0 && rowCount % maxScanRate == 0) {
+        long timePassedMillis = System.currentTimeMillis() - rowStartMillis;
+        try {
+          // If the argument is less than or equal to zero, do not sleep at all.
+          TimeUnit.MILLISECONDS.sleep(1000 - timePassedMillis);
+        } catch (InterruptedException e) {
+          System.err.println("Exception during scan throttling: " + e);
+          return Status.ERROR;
+        }
+      }
     }
     return Status.OK;
   }
