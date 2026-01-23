@@ -21,25 +21,12 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.cloud.datastore.*;
 import com.google.cloud.datastore.Entity;
-import com.google.datastore.v1.*;
-import com.google.datastore.v1.CommitRequest.Mode;
-import com.google.datastore.v1.Key;
 import com.google.datastore.v1.ReadOptions.ReadConsistency;
-import com.google.datastore.v1.Value;
 import com.google.datastore.v1.client.DatastoreHelper;
 import com.google.cloud.datastore.Datastore;
 import com.google.cloud.datastore.DatastoreOptions;
-//import com.google.cloud.opentelemetry.trace.TraceConfiguration;
 import com.google.cloud.opentelemetry.trace.TraceExporter;
 import com.google.cloud.opentelemetry.trace.TraceConfiguration;
-//import io.opentelemetry.api.GlobalOpenTelemetry;
-//import io.opentelemetry.api.trace.Span;
-//import io.opentelemetry.api.trace.SpanContext;
-//import io.opentelemetry.api.trace.TraceFlags;
-//import io.opentelemetry.api.trace.TraceState;
-//import io.opentelemetry.api.trace.Tracer;
-//import io.opentelemetry.context.Context;
-//import io.opentelemetry.context.Scope;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.api.trace.Span;
@@ -47,16 +34,13 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
-//import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
-import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
-import io.opentelemetry.exporters.logging.*;
-//import io.opentelemetry.exporter.logging.LoggingSpanExporter;
-import io.opentelemetry.exporters.logging.LoggingSpanExporter;
-//import io.opentelemetry.sdk.trace.samplers.Sampler;
+import io.opentelemetry.sdk.trace.samplers.Sampler;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
+import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.sdk.trace.SpanProcessor;
 import static io.opentelemetry.semconv.resource.attributes.ResourceAttributes.SERVICE_NAME;
 
+import java.time.Duration;
 import site.ycsb.ByteIterator;
 import site.ycsb.DB;
 import site.ycsb.DBException;
@@ -106,7 +90,10 @@ public class GoogleDatastoreClient extends DB {
   private ReadConsistency readConsistency = ReadConsistency.STRONG;
 
   private boolean isEventualConsistency = false;
+  private boolean tracingEnabled = false;
+  private OpenTelemetrySdk otel;
 
+  private Tracer tracer;
   private EntityGroupingMode entityGroupingMode =
       EntityGroupingMode.ONE_ENTITY_PER_GROUP;
 
@@ -116,25 +103,23 @@ public class GoogleDatastoreClient extends DB {
 
   private static boolean skipIndex = true;
 
-  private Tracer tracer;
-
   /**
    * Initialize any state for this DB. Called once per DB instance; there is
    * one DB instance per client thread.
    */
   @Override
   public void init() throws DBException {
-//    String debug = getProperties().getProperty("googledatastore.debug", null);
-//    if (null != debug && "true".equalsIgnoreCase(debug)) {
-//      logger.setLevel(Level.DEBUG);
-//    }
-    logger.setLevel(Level.INFO);
+    String debug = getProperties().getProperty("googledatastore.debug", null);
+    if (null != debug && "true".equalsIgnoreCase(debug)) {
+      logger.setLevel(Level.DEBUG);
+    }
     String skipIndexString = getProperties().getProperty(
         "googledatastore.skipIndex", null);
     if (null != skipIndexString && "false".equalsIgnoreCase(skipIndexString)) {
       skipIndex = false;
     }
-    // We need the following 3 essential properties to initialize datastore:
+
+    // We need the following 4 essential properties to initialize datastore:
     //
     // - ProjectId,
     // - DatasetId,
@@ -159,6 +144,7 @@ public class GoogleDatastoreClient extends DB {
         "googledatastore.serviceAccountEmail", null);
 
     // Below are properties related to benchmarking.
+
     String readConsistencyConfig = getProperties().getProperty(
         "googledatastore.readConsistency", null);
     if (readConsistencyConfig != null) {
@@ -166,13 +152,12 @@ public class GoogleDatastoreClient extends DB {
         this.readConsistency = ReadConsistency.valueOf(
             readConsistencyConfig.trim().toUpperCase());
         this.isEventualConsistency = readConsistencyConfig.trim().toUpperCase().equals("EVENTUAL");
-        logger.debug("ReadConsistency: " + this.readConsistency + ". isEventual: " + this.isEventualConsistency);
-
       } catch (IllegalArgumentException e) {
         throw new DBException("Invalid read consistency specified: " +
             readConsistencyConfig + ". Expecting STRONG or EVENTUAL.");
       }
     }
+
     //
     // Entity Grouping Mode (googledatastore.entitygroupingmode), see
     // documentation in conf/googledatastore.properties.
@@ -189,47 +174,11 @@ public class GoogleDatastoreClient extends DB {
             "MULTI_ENTITY_PER_GROUP.");
       }
     }
-    this.rootEntityName = getProperties().getProperty(
-        "googledatastore.rootEntityName", "YCSB_ROOT_ENTITY");
-    // Configure OpenTelemetry Tracing SDK
-    Resource resource = Resource
-        .getDefault().merge(Resource.builder().put(SERVICE_NAME, "My App").build());
-    SpanExporter gcpTraceExporter;
-    try {
-      gcpTraceExporter = TraceExporter.createWithConfiguration(
-          TraceConfiguration.builder().setProjectId("cindy-cloud-sdk-test").build()
-      );
-
-    } catch (Exception exception) {
-      throw new DBException("Unable to create gcp trace exporter " +
-          exception.getMessage(), exception);
-    }
-
-    // Using a batch span processor
-    // You can use `.setScheduleDelay()`, `.setExporterTimeout()`,
-    // `.setMaxQueueSize`(), and `.setMaxExportBatchSize()` to further customize.
-    SpanProcessor gcpSpanProcessor =
-        SimpleSpanProcessor.builder(gcpTraceExporter).build();
-  //  LoggingSpanExporter loggingSpanExporter = LoggingSpanExporter.create();
-    SpanProcessor loggingSpanProcessor = SimpleSpanProcessor.builder(new LoggingSpanExporter()).build();
-
-    // Export directly Cloud Trace with 50% trace sampling ratio
-    OpenTelemetrySdk otel = OpenTelemetrySdk.builder()
-        .setTracerProvider(SdkTracerProvider.builder()
-            .setResource(resource)
-            .addSpanProcessor(gcpSpanProcessor)
-            .addSpanProcessor(loggingSpanProcessor)
-            .build()).build();
-
-    logger.info("otel sdk class: " + otel.toString());
-    tracer = otel.getTracer("YCSB_Datastore_Test");
 
     try {
-      // Setup the connection to Google Cloud Datastore with the credentials
-      // obtained from the configure.
-      //DatastoreOptions.Builder options = new DatastoreOptions.Builder().projectId("cindy-cloud-sdk-test");
+      // Set up the connection to Google Cloud Datastore with the credentials
+      // obtained from the configuration.
       Credential credential = GoogleCredential.getApplicationDefault();
-
       if (serviceAccountEmail != null && privateKeyFile != null) {
         credential = DatastoreHelper.getServiceAccountCredential(
             serviceAccountEmail, privateKeyFile);
@@ -242,21 +191,34 @@ public class GoogleDatastoreClient extends DB {
             + ", Service Account Email: " + ((GoogleCredential) credential).getServiceAccountId());
       }
 
-      logger.info("credential: " + ((GoogleCredential) credential).toString());
+      // googledatastore.tracingenabled must be set to enable publishing traces to Cloud Trace
+      // Tracing depends on the following external APIs/Services:
+      // 1. Java OpenTelemetry SDK
+      // 2. Cloud Trace Exporter
+      // 3. TraceServiceClient from Cloud Trace API v1.
+      // Permissions to enabled tracing (https://cloud.google.com/trace/docs/iam#trace-roles):
+      // 1. gcloud auth application-default login must be run with the test user.
+      // 2. To write traces, test user must have one of roles/cloudtrace.[admin|agent|user] roles.
+      // 3. To read traces, test user must have one of roles/cloudtrace.[admin|user] roles.
+      tracingEnabled = Boolean.parseBoolean(getProperties()
+          .getProperty("googledatastore.tracingenabled", "false"));
+      otel = getOtelSdk(projectId);
+      logger.info("otel sdk class: " + otel.toString());
+      tracer = otel.getTracer("YCSB_Datastore_Test");
+      logger.info("tracingEnabled=" + tracingEnabled);
 
-      DatastoreOptions datastoreOptions = DatastoreOptions
+      DatastoreOptions.Builder datastoreOptionsBuilder = DatastoreOptions
           .newBuilder()
           .setProjectId(projectId)
           .setDatabaseId(datasetId)
           .setOpenTelemetryOptions(
               DatastoreOpenTelemetryOptions.newBuilder()
-                  .setTracingEnabled(true)
+                  .setTracingEnabled(tracingEnabled)
                   .setOpenTelemetry(otel)
-                  .build())
-          .build();
+                  .build());
 
+      DatastoreOptions datastoreOptions = datastoreOptionsBuilder.build();
       datastore = datastoreOptions.getService();
-
     } catch (GeneralSecurityException exception) {
       throw new DBException("Security error connecting to the datastore: " +
           exception.getMessage(), exception);
@@ -270,20 +232,74 @@ public class GoogleDatastoreClient extends DB {
         datastore.toString());
   }
 
+  private OpenTelemetrySdk getOtelSdk(String projectId) throws DBException {
+    // Configure OpenTelemetry Tracing SDK
+    Resource resource = Resource
+        .getDefault().merge(Resource.builder().put(SERVICE_NAME, "YCSB Datastore").build());
+    SpanExporter gcpTraceExporter;
+    try {
+      gcpTraceExporter = TraceExporter.createWithConfiguration(
+          TraceConfiguration.builder().setProjectId(projectId).build()
+      );
+
+    } catch (Exception exception) {
+      throw new DBException("Unable to create gcp trace exporter " +
+          exception.getMessage(), exception);
+    }
+
+    int traceSpanProcessorDelayMs =
+        Integer.parseInt(
+            getProperties().getProperty(
+                "googledatastore.tracespanprocessordelayms", "5000"));
+    int traceSpanQueueSize =
+        Integer.parseInt(getProperties().getProperty(
+            "googledatastore.tracespanqueuesize", "4096"));
+    int traceSpanExportBatchSize = Integer.parseInt(
+        getProperties().getProperty(
+            "googledatastore.tracespanexportbatchsize", "4096"));
+    // Using a batch span processor
+    // You can use `.setScheduleDelay()`, `.setExporterTimeout()`,
+    // `.setMaxQueueSize`(), and `.setMaxExportBatchSize()` to further customize.
+    SpanProcessor gcpSpanProcessor = BatchSpanProcessor.builder(gcpTraceExporter)
+        .setScheduleDelay(Duration.ofMillis(traceSpanProcessorDelayMs)) // milliseconds
+        .setMaxQueueSize(traceSpanQueueSize) // max queue size before dropping spans
+        .setMaxExportBatchSize(traceSpanExportBatchSize).build(); // max number of spans per batch
+
+    // Default trace ID ratio of 10% when enabled
+    Double traceIdRatio = Double.valueOf(
+        getProperties().getProperty("googledatastore.tracesamplingratio", "0.10"));
+
+    logger.info("trace sampling ratio: " + traceIdRatio);
+    // Export directly Cloud Trace with 10% trace sampling ratio by default when
+    // googledatastore.tracingenabled=true
+    SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+        .setResource(resource)
+        .addSpanProcessor(gcpSpanProcessor)
+        .setSampler(Sampler.parentBased(Sampler.traceIdRatioBased(traceIdRatio)))
+        .build();
+    if (!tracingEnabled) {
+      // disable tracing
+      tracerProvider.shutdown();
+      logger.info("TracerProvider shutdown");
+    }
+    otel = OpenTelemetrySdk.builder()
+        .setTracerProvider(tracerProvider).build();
+    return otel;
+  }
+
   @Override
   public Status read(String table, String key, Set<String> fields,
                      Map<String, ByteIterator> result) {
-
-    KeyFactory keyFactory = datastore.newKeyFactory().setKind(table);
+    com.google.cloud.datastore.Key newKey = buildPrimaryKey(table).newKey(key);
     Entity entity = null;
     Span readSpan = tracer.spanBuilder("ycsb-read").startSpan();
-    logger.info("readspan: " + readSpan);
     try (Scope ignore = readSpan.makeCurrent()) {
       if (isEventualConsistency) {
-        entity = datastore.get(keyFactory.newKey(key), ReadOption.eventualConsistency());
+        entity = datastore.get(newKey, ReadOption.eventualConsistency());
       } else {
-        entity = datastore.get(keyFactory.newKey(key));
+        entity = datastore.get(newKey);
       }
+      readSpan.addEvent("datastore.get returned");
     } catch (com.google.cloud.datastore.DatastoreException exception) {
       readSpan.setStatus(StatusCode.ERROR, exception.getMessage());
       logger.error(
@@ -297,11 +313,6 @@ public class GoogleDatastoreClient extends DB {
     } finally {
       readSpan.end();
     }
-
-    System.out.println(entity);
-
-    // logger.debug("Read entity: " + entity.toString());
-
     Map<String, com.google.cloud.datastore.Value<?>> properties = entity.getProperties();
     Set<String> propertiesToReturn =
         (fields == null ? properties.keySet() : fields);
@@ -332,7 +343,7 @@ public class GoogleDatastoreClient extends DB {
   @Override
   public Status insert(String table, String key,
                        Map<String, ByteIterator> values) {
-    // Use Upsert to allow overwrite of existing key instead of failing the
+    // Use Upsert to allow to overwrite of existing key instead of failing the
     // load (or run) just because the DB already has the key.
     // This is the same behavior as what other DB does here (such as
     // the DynamoDB client).
@@ -344,61 +355,37 @@ public class GoogleDatastoreClient extends DB {
     return doSingleItemMutation(table, key, null, MutationType.DELETE);
   }
 
-  private Key.Builder buildPrimaryKey(String table, String key) {
-    Key.Builder result = Key.newBuilder();
-
+  private KeyFactory buildPrimaryKey(String table) {
+    KeyFactory keyFactory = datastore.newKeyFactory().setKind(table);
     if (this.entityGroupingMode == EntityGroupingMode.MULTI_ENTITY_PER_GROUP) {
       // All entities are in side the same group when we are in this mode.
-      result.addPath(Key.PathElement.newBuilder().setKind(table).
-          setName(rootEntityName));
+      keyFactory.addAncestor(PathElement.of(table, rootEntityName));
     }
 
-    return result.addPath(Key.PathElement.newBuilder().setKind(table)
-        .setName(key));
-  }
-
-  private com.google.cloud.datastore.Key buildPrimaryKey1(String table, String key) {
-
-    return datastore.newKeyFactory().setKind(table).newKey(key);
+    return keyFactory;
   }
 
   private Status doSingleItemMutation(String table, String key,
                                       @Nullable Map<String, ByteIterator> values,
                                       MutationType mutationType) {
     // First build the key.
-    Key.Builder datastoreKey = buildPrimaryKey(table, key);
+    com.google.cloud.datastore.Key datastoreKey = buildPrimaryKey(table).newKey(key);
     Span singleItemSpan = tracer.spanBuilder("ycsb-update").startSpan();
 
-    // Build a commit request in non-transactional mode.
-    // Single item mutation to google datastore
-    // is always atomic and strongly consistent. Transaction is only necessary
-    // for multi-item mutation, or Read-modify-write operation.
-    CommitRequest.Builder commitRequest = CommitRequest.newBuilder();
-    commitRequest.setMode(Mode.NON_TRANSACTIONAL);
-
     if (mutationType == MutationType.DELETE) {
-      commitRequest.addMutationsBuilder().setDelete(datastoreKey);
-
+      datastore.delete(datastoreKey);
     } else {
       // If this is not for delete, build the entity.
-      Entity.Builder entityBuilder = Entity.newBuilder(buildPrimaryKey1(table, key));
-      //  entityBuilder.setKey(buildPrimaryKey1(table, key));
-
-      // Entity entity1 = Entity.newBuilder(datastoreKey);
+      Entity.Builder entityBuilder = Entity.newBuilder(datastoreKey);
       for (Entry<String, ByteIterator> val : values.entrySet()) {
-        entityBuilder.set(val.getKey(), com.google.cloud.datastore.Value.fromPb(Value.newBuilder()
-            .setStringValue(val.getValue().toString())
-            .setExcludeFromIndexes(skipIndex).build()));
+        entityBuilder.set(val.getKey(), StringValue.newBuilder(val.getValue().toString())
+            .setExcludeFromIndexes(skipIndex).build());
       }
       Entity entity = entityBuilder.build();
-    //  logger.debug("entity built as: " + entity.toString());
-
       try (Scope ignore = singleItemSpan.makeCurrent()) {
         if (mutationType == MutationType.UPSERT) {
-          //  commitRequest.addMutationsBuilder().setUpsert(entity);
           datastore.put(entity);
         } else if (mutationType == MutationType.UPDATE) {
-          // commitRequest.addMutationsBuilder().setUpdate(entity);
           datastore.update(entity);
         } else {
           throw new RuntimeException("Impossible MutationType, code bug.");
