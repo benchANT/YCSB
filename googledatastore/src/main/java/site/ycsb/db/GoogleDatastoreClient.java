@@ -19,10 +19,16 @@ package site.ycsb.db;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+import com.google.api.gax.grpc.ChannelPoolSettings;
+import com.google.api.gax.grpc.InstantiatingGrpcChannelProvider;
 import com.google.cloud.datastore.*;
 import com.google.cloud.datastore.Entity;
+import com.google.cloud.datastore.v1.DatastoreSettings;
+import com.google.cloud.grpc.GrpcTransportOptions;
+import com.google.datastore.v1.*;
 import com.google.datastore.v1.ReadOptions.ReadConsistency;
 import com.google.datastore.v1.client.DatastoreHelper;
+import com.google.datastore.v1.Value;
 import com.google.cloud.datastore.Datastore;
 import com.google.cloud.datastore.DatastoreOptions;
 import com.google.cloud.opentelemetry.trace.TraceExporter;
@@ -133,6 +139,14 @@ public class GoogleDatastoreClient extends DB {
     }
     String datasetId = getProperties().getProperty(
         "googledatastore.datasetId", null);
+
+    boolean usegRPC = Boolean.parseBoolean(getProperties().getProperty(
+        "googledatastore.usegRPC", "true"));
+    logger.info("Using gRPC transport:" + usegRPC);
+    boolean useChannelProvider = Boolean.parseBoolean(getProperties().getProperty(
+        "googledatastore.useChannelProvider", "true"));
+    logger.info("Using gRPC ChannelProvider:" + useChannelProvider);
+
     String privateKeyFile = getProperties().getProperty(
         "googledatastore.privateKeyFile", null);
     String serviceAccountEmail = getProperties().getProperty(
@@ -212,6 +226,17 @@ public class GoogleDatastoreClient extends DB {
                   .build());
       if (datasetId != null) {
         datastoreOptionsBuilder.setDatabaseId(datasetId);
+      }
+
+      if (usegRPC) {
+        if (useChannelProvider) {
+          InstantiatingGrpcChannelProvider channelProvider = DatastoreSettings
+              .defaultGrpcTransportProviderBuilder()
+              .setChannelPoolSettings(ChannelPoolSettings.builder()
+                  .build()).build();
+          datastoreOptionsBuilder.setChannelProvider(channelProvider);
+        }
+        datastoreOptionsBuilder.setTransportOptions(GrpcTransportOptions.newBuilder().build());
       }
 
       DatastoreOptions datastoreOptions = datastoreOptionsBuilder.build();
