@@ -118,6 +118,7 @@ LICENSE file.
     <asynchbase.version>1.8.2</asynchbase.version>
     <azurecosmos.version>4.8.0</azurecosmos.version>
     <azurestorage.version>4.0.0</azurestorage.version>
+    <bigquery.version>2.57.1</bigquery.version>
     <cassandra.cql.version>3.0.0</cassandra.cql.version>
     <cassandra4.cql.version>4.13.0</cassandra4.cql.version>
     <cloudspanner.version>6.71.0</cloudspanner.version>
@@ -172,6 +173,7 @@ LICENSE file.
     <module>asynchbase</module>
     <module>azurecosmos</module>
     <module>azuretablestorage</module>
+    <module>bigquery</module>
     <module>cassandra</module>
     <module>cassandra4</module>
     <module>cloudspanner</module>
