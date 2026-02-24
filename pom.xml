@@ -133,6 +133,7 @@ LICENSE file.
     <!-- deprecated, please use googlebigtable2 -->
     <googlebigtable.version>1.4.0</googlebigtable.version>
     <googlebigtable2.version>2.47.0</googlebigtable2.version>
+    <googlefirestore.version>3.31.9</googlefirestore.version>
     <griddb.version>4.0.0</griddb.version>
     <hbase1.version>1.4.12</hbase1.version>
     <hbase2.version>2.2.3</hbase2.version>
@@ -189,6 +190,7 @@ LICENSE file.
     <module>googlebigtable</module>
     <module>googlebigtable2</module>
     <module>googledatastore</module>
+    <module>googlefirestore</module>
     <module>griddb</module>
     <module>hbase1</module>
     <module>hbase2</module>
