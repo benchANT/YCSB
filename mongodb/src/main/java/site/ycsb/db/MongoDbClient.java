@@ -216,7 +216,6 @@ public class MongoDbClient extends DB {
       */
 
       try {
-<<<<<<< HEAD
         ConnectionString cString = new ConnectionString(url);
         readPreference = cString.getReadPreference();
         writeConcern = cString.getWriteConcern();
