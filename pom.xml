@@ -187,7 +187,7 @@ LICENSE file.
     <module>elasticsearch5</module>
     <module>foundationdb</module>
     <module>geode</module>
-    <module>googlebigtable</module>
+    <!-- <module>googlebigtable</module> -->
     <module>googlebigtable2</module>
     <module>googledatastore</module>
     <module>googlefirestore</module>
@@ -213,7 +213,7 @@ LICENSE file.
     <module>s3</module>
     <module>seaweedfs</module>
     <module>scylla</module>
-    <module>solr7</module>
+    <!-- <module>solr7</module> -->
     <module>tarantool</module>
     <module>tablestore</module>
     <module>voltdb</module>
