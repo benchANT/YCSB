@@ -139,11 +139,11 @@ LICENSE file.
       <artifactId>googledatastore-binding</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
+    <!-- <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>googlebigtable-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency> -->
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>googlebigtable2-binding</artifactId>
