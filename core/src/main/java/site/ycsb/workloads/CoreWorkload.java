@@ -19,7 +19,6 @@ package site.ycsb.workloads;
 
 import site.ycsb.*;
 import site.ycsb.generator.*;
-import site.ycsb.generator.UniformLongGenerator;
 import site.ycsb.measurements.Measurements;
 
 import java.io.IOException;
@@ -529,8 +528,8 @@ public class CoreWorkload extends Workload {
       // the keyspace doesn't change from the perspective of the scrambled zipfian generator
       final double insertproportion = Double.parseDouble(
           p.getProperty(INSERT_PROPORTION_PROPERTY, INSERT_PROPORTION_PROPERTY_DEFAULT));
-      int opcount = Integer.parseInt(p.getProperty(Client.OPERATION_COUNT_PROPERTY));
-      int expectednewkeys = (int) ((opcount) * insertproportion * 2.0); // 2 is fudge factor
+      long opcount = Long.parseLong(p.getProperty(Client.OPERATION_COUNT_PROPERTY));
+      long expectednewkeys = (long) ((opcount) * insertproportion * 2.0); // 2 is fudge factor
 
       keychooser = new ScrambledZipfianGenerator(insertstart, insertstart + insertcount + expectednewkeys);
     } else if (requestdistrib.compareTo("latest") == 0) {
@@ -855,7 +854,6 @@ public class CoreWorkload extends Workload {
       // update a random field
       values = buildSingleValue(keyname);
     }
-
     db.update(table, keyname, values);
   }
 

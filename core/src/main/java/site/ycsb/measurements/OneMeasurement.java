@@ -23,7 +23,7 @@ import site.ycsb.measurements.exporter.MeasurementsExporter;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A single measured metric (such as READ LATENCY).
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class OneMeasurement {
 
   private final String name;
-  private final ConcurrentHashMap<Status, AtomicInteger> returncodes;
+  private final ConcurrentHashMap<Status, AtomicLong> returncodes;
 
   public String getName() {
     return name;
@@ -53,11 +53,11 @@ public abstract class OneMeasurement {
    * No need for synchronization, using CHM to deal with that.
    */
   public void reportStatus(Status status) {
-    AtomicInteger counter = returncodes.get(status);
+    AtomicLong counter = returncodes.get(status);
 
     if (counter == null) {
-      counter = new AtomicInteger();
-      AtomicInteger other = returncodes.putIfAbsent(status, counter);
+      counter = new AtomicLong();
+      AtomicLong other = returncodes.putIfAbsent(status, counter);
       if (other != null) {
         counter = other;
       }
@@ -75,7 +75,7 @@ public abstract class OneMeasurement {
   public abstract void exportMeasurements(MeasurementsExporter exporter) throws IOException;
 
   protected final void exportStatusCounts(MeasurementsExporter exporter) throws IOException {
-    for (Map.Entry<Status, AtomicInteger> entry : returncodes.entrySet()) {
+    for (Map.Entry<Status, AtomicLong> entry : returncodes.entrySet()) {
       exporter.write(getName(), "Return=" + entry.getKey().getName(), entry.getValue().get());
     }
   }

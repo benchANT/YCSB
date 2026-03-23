@@ -280,7 +280,7 @@ public final class Client {
     boolean status = Boolean.valueOf(props.getProperty(STATUS_PROPERTY, String.valueOf(false)));
     String label = props.getProperty(LABEL_PROPERTY, "");
 
-    long maxExecutionTime = Integer.parseInt(props.getProperty(MAX_EXECUTION_TIME, "0"));
+    long maxExecutionTime = Long.parseLong(props.getProperty(MAX_EXECUTION_TIME, "0"));
 
     //get number of threads, target and db
     int threadcount = Integer.parseInt(props.getProperty(THREAD_COUNT_PROPERTY, "1"));
