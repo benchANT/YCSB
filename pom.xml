@@ -120,7 +120,7 @@ LICENSE file.
     <azurestorage.version>4.0.0</azurestorage.version>
     <bigquery.version>2.57.1</bigquery.version>
     <cassandra.cql.version>3.0.0</cassandra.cql.version>
-    <cassandra4.cql.version>4.13.0</cassandra4.cql.version>
+    <cassandra4.cql.version>4.17.0</cassandra4.cql.version>
     <!-- <cloudspanner.version>6.71.0</cloudspanner.version> -->
     <cloudspanner.version>6.91.1</cloudspanner.version>
     <couchbase.version>1.4.10</couchbase.version>

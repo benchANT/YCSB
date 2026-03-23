@@ -46,19 +46,13 @@ LICENSE file.
     </dependency>
     <dependency>
       <groupId>com.datastax.oss</groupId>
-      <artifactId>java-driver-query-builder</artifactId>
-      <version>${cassandra4.cql.version}</version>
+      <artifactId>java-driver-query-builder</artifactId>      <version>${cassandra4.cql.version}</version>
     </dependency>
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>core</artifactId>
       <version>${project.version}</version>
       <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.datastax.oss</groupId>
-      <artifactId>java-driver-query-builder</artifactId>
-      <version>${cassandra4.cql.version}</version>
     </dependency>
     <dependency>
       <groupId>org.cassandraunit</groupId>
