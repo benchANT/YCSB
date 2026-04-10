@@ -109,7 +109,7 @@ LICENSE file.
   <properties>
     <maven.assembly.version>2.5.5</maven.assembly.version>
     <maven.dependency.version>2.10</maven.dependency.version>
-
+    <openjpa.jdbc.version>2.1.1</openjpa.jdbc.version>
     <!-- datastore binding versions, lex sorted -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -119,9 +119,11 @@ LICENSE file.
     <module>core</module>
     <module>binding-parent</module>
     <module>distribution</module>
+    <!-- workloads lex sorted -->
+    <module>workload-iot</module>
     <!-- all the datastore bindings, lex sorted please -->
     <module>jdbc</module>
-    <module>clickhouse</module>
+    <!-- <module>clickhouse</module> -->
   </modules>
 
   <build>
