@@ -18,6 +18,9 @@
 package site.ycsb;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.htrace.core.Tracer;
+
 import java.util.Properties;
 
 
@@ -35,7 +38,7 @@ import java.util.Properties;
  * the "insertcount" property, which is interpreted by Client, can be used to tell each instance of the
  * client how many inserts to do. In the example above, both clients should have insertcount=500000.
  */
-public abstract class Workload {
+public abstract class Workload<D extends DB> {
   public static final String INSERT_START_PROPERTY = "insertstart";
   public static final String INSERT_COUNT_PROPERTY = "insertcount";
   
@@ -90,7 +93,7 @@ public abstract class Workload {
    * effects other than DB operations and mutations on threadstate. Mutations to threadstate do not need to be
    * synchronized, since each thread has its own threadstate instance.
    */
-  public abstract boolean doInsert(DB db, Object threadstate);
+  public abstract boolean doInsert(D db, Object threadstate);
 
   /**
    * Do one transaction operation. Because it will be called concurrently from multiple client threads, this
@@ -103,7 +106,7 @@ public abstract class Workload {
    * Return true otherwise. Return true for workloads that rely on operationcount. For workloads that read
    * traces from a file, return true when there are more to do, false when you are done.
    */
-  public abstract boolean doTransaction(DB db, Object threadstate);
+  public abstract boolean doTransaction(D db, Object threadstate);
 
   /**
    * Allows scheduling a request to stop the workload.
@@ -119,4 +122,8 @@ public abstract class Workload {
   public boolean isStopRequested() {
     return stopRequested.get();
   }
+
+  public abstract Class<D> getDBClass();
+
+  public abstract D createDbWrapper(D db, Tracer tracer);
 }

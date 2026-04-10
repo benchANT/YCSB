@@ -29,15 +29,18 @@ public final class DBFactory {
     // not used
   }
 
-  public static DB newDB(String dbname, Properties properties, final Tracer tracer) throws UnknownDBException {
+  public static<D extends DB> D newDB(String dbname, Properties properties, final Tracer tracer, Workload<D> workload) throws UnknownDBException {
     ClassLoader classLoader = DBFactory.class.getClassLoader();
 
-    DB ret;
+    D ret;
 
     try {
-      Class dbclass = classLoader.loadClass(dbname);
-
-      ret = (DB) dbclass.newInstance();
+      Class<?> dbclass = classLoader.loadClass(dbname);
+      Class<D> targetClass = workload.getDBClass();
+      if (!targetClass.isAssignableFrom(dbclass)) {
+        throw new UnknownDBException("DB class " + dbname + " does not extend " + targetClass.getName());
+      }
+      ret = targetClass.cast(dbclass.newInstance());
     } catch (Exception e) {
       e.printStackTrace();
       return null;
@@ -45,7 +48,7 @@ public final class DBFactory {
 
     ret.setProperties(properties);
 
-    return new DBWrapper(ret, tracer);
+    return workload.createDbWrapper(ret, tracer);
   }
 
 }

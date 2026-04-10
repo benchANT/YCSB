@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  * @implSpec It's vital to call <tt>super.init()</tt> when overwriting the init method
  * to correctly initialize the workload-parsing.
  */
-public abstract class TimeseriesDB extends DB {
+public abstract class TimeseriesDB extends CoreDB {
 
   // defaults for downsampling. Basically we ignore it
   private static final String DOWNSAMPLING_FUNCTION_PROPERTY_DEFAULT = "NONE";

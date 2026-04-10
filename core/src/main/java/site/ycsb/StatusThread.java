@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * A thread to periodically show the status of the experiment to reassure you that progress is being made.
  */
-public class StatusThread extends Thread {
+public class StatusThread<D extends DB> extends Thread {
   // Counts down each of the clients completing
   private final CountDownLatch completeLatch;
 
@@ -39,7 +39,7 @@ public class StatusThread extends Thread {
   private final boolean trackJVMStats;
 
   // The clients that are running.
-  private final List<ClientThread> clients;
+  private final List<ClientThread<D>> clients;
 
   private final String label;
   private final boolean standardstatus;
@@ -67,7 +67,7 @@ public class StatusThread extends Thread {
    * @param standardstatus        If true the status is printed to stdout in addition to stderr.
    * @param statusIntervalSeconds The number of seconds between status updates.
    */
-  public StatusThread(CountDownLatch completeLatch, List<ClientThread> clients,
+  public StatusThread(CountDownLatch completeLatch, List<ClientThread<D>> clients,
                       String label, boolean standardstatus, int statusIntervalSeconds) {
     this(completeLatch, clients, label, standardstatus, statusIntervalSeconds, false);
   }
@@ -83,7 +83,7 @@ public class StatusThread extends Thread {
    * @param statusIntervalSeconds The number of seconds between status updates.
    * @param trackJVMStats         Whether or not to track JVM stats.
    */
-  public StatusThread(CountDownLatch completeLatch, List<ClientThread> clients,
+  public StatusThread(CountDownLatch completeLatch, List<ClientThread<D>> clients,
                       String label, boolean standardstatus, int statusIntervalSeconds,
                       boolean trackJVMStats) {
     this.completeLatch = completeLatch;

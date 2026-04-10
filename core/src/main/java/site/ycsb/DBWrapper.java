@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Wrapper around a "real" DB that measures latencies and counts return codes.
  * Also reports latency separately between OK and failed operations.
  */
-public class DBWrapper extends DB {
-  private final DB db;
+public class DBWrapper extends CoreDB {
+  private final CoreDB db;
   private final Measurements measurements;
   private final Tracer tracer;
 
@@ -53,7 +53,7 @@ public class DBWrapper extends DB {
   private final String scopeStringScan;
   private final String scopeStringUpdate;
 
-  public DBWrapper(final DB db, final Tracer tracer) {
+  public DBWrapper(final CoreDB db, final Tracer tracer) {
     this.db = db;
     measurements = Measurements.getMeasurements();
     this.tracer = tracer;

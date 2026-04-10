@@ -26,14 +26,14 @@ import java.util.concurrent.locks.LockSupport;
 /**
  * A thread for executing transactions or data inserts to the database.
  */
-public class ClientThread implements Runnable {
+public class ClientThread<D extends DB> implements Runnable {
   // Counts down each of the clients completing.
   private final CountDownLatch completeLatch;
 
   private static boolean spinSleep;
-  private DB db;
+  private D db;
   private boolean dotransactions;
-  private Workload workload;
+  private Workload<D> workload;
   private long opcount;
   private double targetOpsPerMs;
 
@@ -56,7 +56,7 @@ public class ClientThread implements Runnable {
    * @param targetperthreadperms target number of operations per thread per ms
    * @param completeLatch        The latch tracking the completion of all clients.
    */
-  public ClientThread(DB db, boolean dotransactions, Workload workload, Properties props, long opcount,
+  public ClientThread(D db, boolean dotransactions, Workload<D> workload, Properties props, long opcount,
                       double targetperthreadperms, CountDownLatch completeLatch) {
     this.db = db;
     this.dotransactions = dotransactions;

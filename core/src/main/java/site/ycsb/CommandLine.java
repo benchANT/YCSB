@@ -84,11 +84,11 @@ public final class CommandLine {
 
     ClassLoader classLoader = CommandLine.class.getClassLoader();
 
-    DB db = null;
+    CoreDB db = null;
 
     try {
       Class dbclass = classLoader.loadClass(dbname);
-      db = (DB) dbclass.newInstance();
+      db = (CoreDB) dbclass.newInstance();
     } catch (Exception e) {
       e.printStackTrace();
       System.exit(0);
@@ -241,7 +241,7 @@ public final class CommandLine {
     }
   }
 
-  private static void handleDelete(String[] tokens, String table, DB db) {
+  private static void handleDelete(String[] tokens, String table, CoreDB db) {
     if (tokens.length != 2) {
       System.out.println("Error: syntax is \"delete keyname\"");
     } else {
@@ -250,7 +250,7 @@ public final class CommandLine {
     }
   }
 
-  private static void handleInsert(String[] tokens, String table, DB db) {
+  private static void handleInsert(String[] tokens, String table, CoreDB db) {
     if (tokens.length < 3) {
       System.out.println("Error: syntax is \"insert keyname name1=value1 [name2=value2 ...]\"");
     } else {
@@ -266,7 +266,7 @@ public final class CommandLine {
     }
   }
 
-  private static void handleUpdate(String[] tokens, String table, DB db) {
+  private static void handleUpdate(String[] tokens, String table, CoreDB db) {
     if (tokens.length < 3) {
       System.out.println("Error: syntax is \"update keyname name1=value1 [name2=value2 ...]\"");
     } else {
@@ -282,7 +282,7 @@ public final class CommandLine {
     }
   }
 
-  private static void handleScan(String[] tokens, String table, DB db) {
+  private static void handleScan(String[] tokens, String table, CoreDB db) {
     if (tokens.length < 3) {
       System.out.println("Error: syntax is \"scan keyname scanlength [field1 field2 ...]\"");
     } else {
@@ -313,7 +313,7 @@ public final class CommandLine {
     }
   }
 
-  private static void handleRead(String[] tokens, String table, DB db) {
+  private static void handleRead(String[] tokens, String table, CoreDB db) {
     if (tokens.length == 1) {
       System.out.println("Error: syntax is \"read keyname [field1 field2 ...]\"");
     } else {

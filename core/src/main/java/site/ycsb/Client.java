@@ -273,10 +273,13 @@ public final class Client {
     }
   }
 
-  @SuppressWarnings("unchecked")
+  // @SuppressWarnings("unchecked")
   public static void main(String[] args) {
     Properties props = parseArguments(args);
+    doMain(props);
+  }
 
+  private static<D extends DB> void doMain(Properties props) {
     boolean status = Boolean.valueOf(props.getProperty(STATUS_PROPERTY, String.valueOf(false)));
     String label = props.getProperty(LABEL_PROPERTY, "");
 
@@ -299,7 +302,7 @@ public final class Client {
 
     Measurements.setProperties(props);
 
-    Workload workload = getWorkload(props);
+    Workload<D> workload = getWorkload(props);
 
     final Tracer tracer = getTracer(props, workload);
 
@@ -308,8 +311,9 @@ public final class Client {
     System.err.println("Starting test.");
     final CountDownLatch completeLatch = new CountDownLatch(threadcount);
 
-    final List<ClientThread> clients = initDb(dbname, props, threadcount, targetperthreadperms,
-        workload, tracer, completeLatch);
+    final List<ClientThread<D>> clients = initDb(
+        dbname, props, threadcount, targetperthreadperms, workload, tracer, completeLatch
+    );
 
     if (status) {
       boolean standardstatus = false;
@@ -319,7 +323,7 @@ public final class Client {
       int statusIntervalSeconds = Integer.parseInt(props.getProperty("status.interval", "10"));
       boolean trackJVMStats = props.getProperty(Measurements.MEASUREMENT_TRACK_JVM_PROPERTY,
           Measurements.MEASUREMENT_TRACK_JVM_PROPERTY_DEFAULT).equals("true");
-      statusthread = new StatusThread(completeLatch, clients, label, standardstatus, statusIntervalSeconds,
+      statusthread = new StatusThread<D>(completeLatch, clients, label, standardstatus, statusIntervalSeconds,
           trackJVMStats);
       statusthread.start();
     }
@@ -331,8 +335,8 @@ public final class Client {
 
     try (final TraceScope span = tracer.newScope(CLIENT_WORKLOAD_SPAN)) {
 
-      final Map<Thread, ClientThread> threads = new HashMap<>(threadcount);
-      for (ClientThread client : clients) {
+      final Map<Thread, ClientThread<?>> threads = new HashMap<>(threadcount);
+      for (ClientThread<?> client : clients) {
         threads.put(new Thread(tracer.wrap(client, "ClientThread")), client);
       }
 
@@ -349,7 +353,7 @@ public final class Client {
 
       opsDone = 0;
 
-      for (Map.Entry<Thread, ClientThread> entry : threads.entrySet()) {
+      for (Map.Entry<Thread, ClientThread<?>> entry : threads.entrySet()) {
         try {
           entry.getKey().join();
           opsDone += entry.getValue().getOpsDone();
@@ -400,13 +404,13 @@ public final class Client {
     System.exit(0);
   }
 
-  private static List<ClientThread> initDb(String dbname, Properties props, int threadcount,
-                                           double targetperthreadperms, Workload workload, Tracer tracer,
+  private static<D extends DB> List<ClientThread<D>> initDb(String dbname, Properties props, int threadcount,
+                                           double targetperthreadperms, Workload<D> workload, Tracer tracer,
                                            CountDownLatch completeLatch) {
     boolean initFailed = false;
     boolean dotransactions = Boolean.valueOf(props.getProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(true)));
 
-    final List<ClientThread> clients = new ArrayList<>(threadcount);
+    final List<ClientThread<D>> clients = new ArrayList<>(threadcount);
     try (final TraceScope span = tracer.newScope(CLIENT_INIT_SPAN)) {
       long opcount;
       if (dotransactions) {
@@ -423,9 +427,9 @@ public final class Client {
         System.out.println("Warning: the threadcount is bigger than recordcount, the threadcount will be recordcount!");
       }
       for (int threadid = 0; threadid < threadcount; threadid++) {
-        DB db;
+        D db;
         try {
-          db = DBFactory.newDB(dbname, props, tracer);
+          db = (D) DBFactory.newDB(dbname, props, tracer, workload);
         } catch (UnknownDBException e) {
           System.out.println("Unknown DB " + dbname);
           initFailed = true;
@@ -439,8 +443,7 @@ public final class Client {
           ++threadopcount;
         }
 
-        ClientThread t = new ClientThread(db, dotransactions, workload, props, threadopcount, targetperthreadperms,
-            completeLatch);
+        ClientThread<D> t = new ClientThread<D>(db, dotransactions, workload, props, threadopcount, targetperthreadperms, completeLatch);
         t.setThreadId(threadid);
         t.setThreadCount(threadcount);
         clients.add(t);
@@ -454,13 +457,13 @@ public final class Client {
     return clients;
   }
 
-  private static Tracer getTracer(Properties props, Workload workload) {
+  private static Tracer getTracer(Properties props, Workload<?> workload) {
     return new Tracer.Builder("YCSB " + workload.getClass().getSimpleName())
         .conf(getHTraceConfiguration(props))
         .build();
   }
 
-  private static void initWorkload(Properties props, Thread warningthread, Workload workload, Tracer tracer) {
+  private static void initWorkload(Properties props, Thread warningthread, Workload<?> workload, Tracer tracer) {
     try {
       try (final TraceScope span = tracer.newScope(CLIENT_WORKLOAD_INIT_SPAN)) {
         workload.init(props);
@@ -500,7 +503,7 @@ public final class Client {
     };
   }
 
-  private static Workload getWorkload(Properties props) {
+  private static<D extends DB> Workload<D> getWorkload(Properties props) {
     ClassLoader classLoader = Client.class.getClassLoader();
 
     try {
@@ -514,9 +517,11 @@ public final class Client {
     System.err.println();
     System.err.println("Loading workload...");
     try {
-      Class workloadclass = classLoader.loadClass(props.getProperty(WORKLOAD_PROPERTY));
-
-      return (Workload) workloadclass.newInstance();
+      Class<?> workloadclass = classLoader.loadClass(props.getProperty(WORKLOAD_PROPERTY));
+      if(Workload.class.isAssignableFrom(workloadclass)){
+        return Workload.class.cast(workloadclass.getDeclaredConstructor().newInstance());
+      }
+      throw new WorkloadException("Workload class " + props.getProperty(WORKLOAD_PROPERTY) + " does not implement Workload interface.");
     } catch (Exception e) {
       e.printStackTrace();
       e.printStackTrace(System.out);

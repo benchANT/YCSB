@@ -35,6 +35,7 @@ import java.util.Vector;
 
 import site.ycsb.ByteIterator;
 import site.ycsb.Client;
+import site.ycsb.CoreDB;
 import site.ycsb.DB;
 import site.ycsb.NumericByteIterator;
 import site.ycsb.Status;
@@ -514,7 +515,7 @@ public class TestTimeSeriesWorkload {
     }
   }
   
-  static class MockDB extends DB {
+  static class MockDB extends CoreDB {
     final List<String> keys = new ArrayList<String>();
     final List<Map<String, ByteIterator>> values = 
         new ArrayList<Map<String, ByteIterator>>();

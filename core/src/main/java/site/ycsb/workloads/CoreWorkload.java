@@ -24,6 +24,8 @@ import site.ycsb.measurements.Measurements;
 import java.io.IOException;
 import java.util.*;
 
+import org.apache.htrace.core.Tracer;
+
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
  * relative proportion of different kinds of operations, and other properties of the workload,
@@ -64,7 +66,7 @@ import java.util.*;
  * required storage size (default: "field")
  * </ul>
  */
-public class CoreWorkload extends Workload {
+public class CoreWorkload extends Workload<CoreDB> {
   /**
    * The name of the database table to run queries against.
    */
@@ -625,7 +627,7 @@ public class CoreWorkload extends Workload {
    * have no side effects other than DB operations.
    */
   @Override
-  public boolean doInsert(DB db, Object threadstate) {
+  public boolean doInsert(CoreDB db, Object threadstate) {
     long keynum = keysequence.nextValue().longValue();
     String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
     HashMap<String, ByteIterator> values = buildValues(dbkey);
@@ -668,7 +670,7 @@ public class CoreWorkload extends Workload {
    * have no side effects other than DB operations.
    */
   @Override
-  public boolean doTransaction(DB db, Object threadstate) {
+  public boolean doTransaction(CoreDB db, Object threadstate) {
     String operation = operationchooser.nextString();
     if(operation == null) {
       return false;
@@ -739,7 +741,7 @@ public class CoreWorkload extends Workload {
     return keynum;
   }
 
-  public void doTransactionRead(DB db) {
+  public void doTransactionRead(CoreDB db) {
     // choose a random key
     long keynum = nextKeynum();
 
@@ -766,7 +768,7 @@ public class CoreWorkload extends Workload {
     }
   }
 
-  public void doTransactionReadModifyWrite(DB db) {
+  public void doTransactionReadModifyWrite(CoreDB db) {
     // choose a random key
     long keynum = nextKeynum();
 
@@ -813,7 +815,7 @@ public class CoreWorkload extends Workload {
     measurements.measureIntended("READ-MODIFY-WRITE", (int) ((en - ist) / 1000));
   }
 
-  public void doTransactionScan(DB db) {
+  public void doTransactionScan(CoreDB db) {
     // choose a random key
     long keynum = nextKeynum();
 
@@ -839,7 +841,7 @@ public class CoreWorkload extends Workload {
     measurements.measure("SCAN-LATENCY-PER-RECORD", (int) ((en - st) / 1000 / scannedRecords.size()));
   }
 
-  public void doTransactionUpdate(DB db) {
+  public void doTransactionUpdate(CoreDB db) {
     // choose a random key
     long keynum = nextKeynum();
 
@@ -857,7 +859,7 @@ public class CoreWorkload extends Workload {
     db.update(table, keyname, values);
   }
 
-  public void doTransactionInsert(DB db) {
+  public void doTransactionInsert(CoreDB db) {
     // choose the next key
     long keynum = transactioninsertkeysequence.nextValue();
 
@@ -917,5 +919,15 @@ public class CoreWorkload extends Workload {
       operationchooser.addValue(readmodifywriteproportion, "READMODIFYWRITE");
     }
     return operationchooser;
+  }
+
+  @Override
+  public CoreDB createDbWrapper(CoreDB db, Tracer tracer) {
+    return new DBWrapper(db, tracer);
+  }
+
+  @Override
+  public Class<CoreDB> getDBClass() {
+    return CoreDB.class;
   }
 }
