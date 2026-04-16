@@ -39,6 +39,9 @@ import java.util.Properties;
  * client how many inserts to do. In the example above, both clients should have insertcount=500000.
  */
 public abstract class Workload<D extends DB> {
+  public static final String DEBUG_PROPERTY = "workload.debug";
+  public static final String DEBUG_PROPERTY_DEFAULT = "false";
+
   public static final String INSERT_START_PROPERTY = "insertstart";
   public static final String INSERT_COUNT_PROPERTY = "insertcount";
   

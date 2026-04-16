@@ -39,6 +39,10 @@ import java.util.Properties;
  * recommend you explain the semantics you chose when presenting performance results.
  */
 public abstract class DB {
+
+  public static final String DEBUG_PROPERTY = "database.debug";
+  public static final String DEBUG_PROPERTY_DEFAULT = "false";
+
   /**
    * Properties for configuring this DB.
    */
