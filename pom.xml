@@ -117,12 +117,14 @@ LICENSE file.
   <modules>
     <!-- our internals -->
     <module>core</module>
+    <module>core-bindings</module>
     <module>binding-parent</module>
     <module>distribution</module>
     <!-- workloads lex sorted -->
     <module>workload-iot</module>
     <!-- all the datastore bindings, lex sorted please -->
     <module>jdbc</module>
+    <module>tigerdata</module>
     <!-- <module>clickhouse</module> -->
   </modules>
 

@@ -39,6 +39,11 @@ LICENSE file.
       <artifactId>core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>site.ycsb</groupId>
+      <artifactId>coredb-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <!-- <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>clickhouse-binding</artifactId>
@@ -47,6 +52,17 @@ LICENSE file.
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>jdbc-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>site.ycsb</groupId>
+      <artifactId>tigerdata-binding</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- workloads -->
+    <dependency>
+      <groupId>site.ycsb</groupId>
+      <artifactId>workload-iot</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>
