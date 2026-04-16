@@ -233,6 +233,22 @@ else
   done
 fi
 
+## FIXME: this is a ugly hack for progressing faster. This needs to be fixed
+# workload-iot folder.
+if [ "${BINDING_DIR}" = "tigerdata" ] ; then
+  echo "[WARN] The 'tigerdata' client needs additional libraries. Adding by hand ..."
+  for f in "$YCSB_HOME"/workload-iot/target/*.jar ; do
+    if [ -r "$f" ] ; then
+      CLASSPATH="$CLASSPATH:$f"
+    fi
+  done
+#for f in "$YCSB_HOME"/"$BINDING_DIR"/target/dependency/*.jar ; do
+#  if [ -r "$f" ] ; then
+#    CLASSPATH="$CLASSPATH:$f"
+#  fi
+fi
+
+
 # Couchbase deprecation message
 if [ "${BINDING_DIR}" = "couchbase" ] ; then
   echo "[WARN] The 'couchbase' client is deprecated. If you are using \
