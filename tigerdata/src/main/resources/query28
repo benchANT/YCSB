@@ -1,0 +1,25 @@
+WITH period_rollups AS (
+ -- 1. Roll up the 15-minute buckets into larger daily buckets
+ SELECT
+   time_bucket('1 day', time_bucket_15m)::date AS work_period,
+   operator_id,
+   SUM(working_ping_count) AS total_working_pings,
+   SUM(idle_ping_count) AS total_idle_pings
+ FROM operator_activity_15m
+ WHERE time_bucket_15m >= NOW() - INTERVAL '30 days' -- Adjust lookback as needed
+ GROUP BY work_period, operator_id
+)
+-- 2. Convert the aggregated pings into formatted hours
+SELECT
+ p.work_period,
+ o.first_name,
+ o.last_name,
+ ROUND((p.total_working_pings / 60.0)::numeric, 2) AS working_hours,
+ ROUND((p.total_idle_pings / 60.0)::numeric, 2) AS idle_hours,
+ ROUND(((p.total_working_pings + p.total_idle_pings) / 60.0)::numeric, 2) AS total_hours_worked
+
+
+FROM period_rollups p
+JOIN operators o ON p.operator_id = o.operator_id
+WHERE (p.total_working_pings + p.total_idle_pings) > 0
+ORDER BY p.work_period DESC, total_hours_worked DESC;

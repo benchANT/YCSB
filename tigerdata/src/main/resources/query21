@@ -1,0 +1,109 @@
+WITH raw_data AS (
+  -- 1. Extract raw 15-minute data and tag it as 'Baseline' or 'Current'
+  SELECT 
+    vin,
+    CASE 
+      WHEN hourly_bucket >= NOW() - INTERVAL '14 days' THEN 'Current' 
+      ELSE 'Baseline' 
+    END AS period,
+    
+    -- Calculate fuel drop
+    CASE 
+      WHEN starting_fuel > ending_fuel THEN starting_fuel - ending_fuel 
+      ELSE 0 
+    END AS fuel_dropped,
+    
+    -- Extract active seconds
+    EXTRACT(EPOCH FROM duration_in(state_summary, 'Working')) AS working_sec,
+    EXTRACT(EPOCH FROM duration_in(state_summary, 'Idle')) AS idle_sec,
+    
+    -- Grab the peak temperatures for this 15-minute window
+    max_coolant_temperature AS max_coolant,
+    max_hydraulic_oil_temperature AS max_hydro
+  FROM fleet_metrics_15m
+  WHERE hourly_bucket >= NOW() - INTERVAL '28 days'
+),
+allocated_metrics AS (
+  -- 2. Allocate the fuel drop proportionally to the Working state
+  SELECT 
+    vin,
+    period,
+    working_sec,
+    idle_sec,
+    max_coolant,
+    max_hydro,
+    COALESCE(fuel_dropped * (working_sec / NULLIF(working_sec + idle_sec, 0)), 0) AS working_fuel
+  FROM raw_data
+),
+period_summaries AS (
+  -- 3. Roll up the data into two massive 14-day buckets per machine
+  SELECT 
+    vin,
+    period,
+    SUM(working_sec) / 3600.0 AS work_hrs,
+    SUM(idle_sec) / 3600.0 AS idle_hrs,
+    SUM(working_fuel) AS total_work_fuel,
+    -- Calculate the average of their peak operating temperatures
+    AVG(max_coolant) AS avg_peak_coolant,
+    AVG(max_hydro) AS avg_peak_hydro
+  FROM allocated_metrics
+  GROUP BY vin, period
+),
+pivoted_baselines AS (
+  -- 4. Pivot the data to put the Baseline and Current metrics side-by-side
+  SELECT 
+    vin,
+    -- Active Hours
+    MAX(CASE WHEN period = 'Baseline' THEN work_hrs + idle_hrs ELSE 0 END) AS b_active_hrs,
+    MAX(CASE WHEN period = 'Current' THEN work_hrs + idle_hrs ELSE 0 END) AS c_active_hrs,
+    
+    -- Idle Percentages
+    MAX(CASE WHEN period = 'Baseline' THEN idle_hrs / NULLIF(work_hrs + idle_hrs, 0) * 100 ELSE 0 END) AS b_idle_pct,
+    MAX(CASE WHEN period = 'Current' THEN idle_hrs / NULLIF(work_hrs + idle_hrs, 0) * 100 ELSE 0 END) AS c_idle_pct,
+    
+    -- Fuel Burn Rates (% per Working Hour)
+    MAX(CASE WHEN period = 'Baseline' THEN total_work_fuel / NULLIF(work_hrs, 0) ELSE 0 END) AS b_burn_rate,
+    MAX(CASE WHEN period = 'Current' THEN total_work_fuel / NULLIF(work_hrs, 0) ELSE 0 END) AS c_burn_rate,
+    
+    -- Temperatures
+    MAX(CASE WHEN period = 'Baseline' THEN avg_peak_coolant ELSE 0 END) AS b_coolant,
+    MAX(CASE WHEN period = 'Current' THEN avg_peak_coolant ELSE 0 END) AS c_coolant,
+    MAX(CASE WHEN period = 'Baseline' THEN avg_peak_hydro ELSE 0 END) AS b_hydro,
+    MAX(CASE WHEN period = 'Current' THEN avg_peak_hydro ELSE 0 END) AS c_hydro
+  FROM period_summaries
+  GROUP BY vin
+)
+-- 5. Calculate the exact variance and trigger the degradation flags
+SELECT 
+  p.vin,
+  m.make,
+  m.model,
+  
+  -- Show the exact increases
+  ROUND((p.c_idle_pct - p.b_idle_pct)::numeric, 2) AS idle_pct_increase,
+  ROUND((p.c_burn_rate - p.b_burn_rate)::numeric, 2) AS burn_rate_increase,
+  ROUND((p.c_coolant - p.b_coolant)::numeric, 2) AS coolant_temp_increase,
+  ROUND((p.c_hydro - p.b_hydro)::numeric, 2) AS hydro_temp_increase,
+  
+  -- Dynamically generate an alert string based on what is breaking
+  CONCAT_WS(' | ',
+    CASE WHEN (p.c_idle_pct - p.b_idle_pct) >= 5.0 THEN 'High Idle' END,
+    CASE WHEN (p.c_burn_rate - p.b_burn_rate) >= 2.0 THEN 'Inefficient Fuel' END,
+    CASE WHEN (p.c_coolant - p.b_coolant) >= 5.0 THEN 'Hot Coolant' END,
+    CASE WHEN (p.c_hydro - p.b_hydro) >= 5.0 THEN 'Hot Hydraulics' END
+  ) AS degradation_flags
+
+FROM pivoted_baselines p
+JOIN machines m ON p.vin = m.vin
+-- Sanity Check: Ensure they operated for at least 5 hours in both 14-day windows
+WHERE p.b_active_hrs > 5 AND p.c_active_hrs > 5
+  -- THE ALARM TRIGGERS: Only show machines that breached at least one of these thresholds
+  AND (
+    (p.c_idle_pct - p.b_idle_pct) >= 5.0 OR
+    (p.c_burn_rate - p.b_burn_rate) >= 2.0 OR
+    (p.c_coolant - p.b_coolant) >= 5.0 OR
+    (p.c_hydro - p.b_hydro) >= 5.0
+  )
+ORDER BY 
+  coolant_temp_increase DESC, 
+  burn_rate_increase DESC;

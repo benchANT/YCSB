@@ -1,0 +1,68 @@
+WITH dominant_states AS (
+ -- 1. Determine the primary state for each 15-minute bucket
+ SELECT
+   hourly_bucket, -- (Your 15m time_bucket column)
+   vin,
+   CASE
+     -- Compare the raw intervals directly to find the winner
+     WHEN duration_in(state_summary, 'Working') >= duration_in(state_summary, 'Idle')
+      AND duration_in(state_summary, 'Working') >= duration_in(state_summary, 'Off')
+     THEN 'Working'
+     WHEN duration_in(state_summary, 'Idle') >= duration_in(state_summary, 'Off')
+     THEN 'Idle'
+     ELSE 'Off'
+   END AS primary_state,
+   -- Extract the exact seconds spent in that winning state
+   CASE
+     WHEN duration_in(state_summary, 'Working') >= duration_in(state_summary, 'Idle')
+      AND duration_in(state_summary, 'Working') >= duration_in(state_summary, 'Off')
+     THEN EXTRACT(EPOCH FROM duration_in(state_summary, 'Working'))     
+     WHEN duration_in(state_summary, 'Idle') >= duration_in(state_summary, 'Off')
+     THEN EXTRACT(EPOCH FROM duration_in(state_summary, 'Idle'))
+     ELSE EXTRACT(EPOCH FROM duration_in(state_summary, 'Off'))
+   END AS primary_state_seconds
+ FROM fleet_metrics_15m
+ WHERE hourly_bucket >= NOW() - INTERVAL '30 days'
+),
+state_changes AS (
+ -- 2. Detect when the primary state changes from one bucket to the next
+ SELECT
+   vin,
+   hourly_bucket,
+   primary_state,
+   primary_state_seconds,
+   CASE
+     WHEN LAG(primary_state) OVER (PARTITION BY vin ORDER BY hourly_bucket) = primary_state
+     THEN 0
+     ELSE 1
+   END AS is_new_session
+ FROM dominant_states
+),
+session_identifiers AS (
+ -- 3. Create a unique ID for every continuous block of identical states
+ SELECT
+   vin,
+   primary_state,
+   primary_state_seconds,
+   SUM(is_new_session) OVER (PARTITION BY vin ORDER BY hourly_bucket) AS session_id
+ FROM state_changes
+),
+session_totals AS (
+ -- 4. Sum the exact seconds belonging to that state within the session
+ SELECT
+   vin,
+   primary_state AS engine_state,
+   session_id,
+   SUM(primary_state_seconds) AS session_duration_seconds
+ FROM session_identifiers
+ GROUP BY vin, primary_state, session_id
+)
+-- 5. Calculate the final averages across all recorded sessions
+SELECT
+ engine_state,
+ COUNT(session_id) AS total_sessions_recorded,
+ ROUND((AVG(session_duration_seconds) / 60.0)::numeric, 2) AS avg_duration_minutes,
+ ROUND((MAX(session_duration_seconds) / 3600.0)::numeric, 2) AS max_duration_hours
+FROM session_totals
+GROUP BY engine_state
+ORDER BY avg_duration_minutes DESC;

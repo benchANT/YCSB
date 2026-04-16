@@ -1,0 +1,59 @@
+WITH machine_totals AS (
+ -- 1. Calculate the total working hours for each machine over the last 30 days
+ SELECT
+   f.vin,
+   m.make,
+   m.model,
+   (SUM(EXTRACT(EPOCH FROM duration_in(f.state_summary, 'Working'))) / 3600.0) AS machine_working_hours
+ FROM fleet_metrics_15m f
+ JOIN machines m ON f.vin = m.vin
+ WHERE f.hourly_bucket >= NOW() - INTERVAL '30 days'
+ GROUP BY f.vin, m.make, m.model
+),
+peer_comparisons AS (
+ -- 2. Find the peer group average and size
+ SELECT
+   vin,
+   make,
+   model,
+   machine_working_hours,
+   AVG(machine_working_hours) OVER (PARTITION BY make, model) AS peer_avg_hours,
+   COUNT(vin) OVER (PARTITION BY make, model) AS peer_group_size
+ FROM machine_totals
+),
+variance_calculations AS (
+ -- 3. Calculate the exact variance percentage
+ SELECT
+   vin,
+   make,
+   model,
+   peer_group_size,
+   ROUND(machine_working_hours::numeric, 2) AS machine_working_hours,
+   ROUND(peer_avg_hours::numeric, 2) AS peer_avg_hours,
+  
+   CASE
+     WHEN peer_avg_hours = 0 THEN 0.00
+     ELSE ROUND(((machine_working_hours - peer_avg_hours) / peer_avg_hours * 100)::numeric, 2)
+   END AS variance_percentage
+  
+ FROM peer_comparisons
+ WHERE peer_group_size > 1
+)
+-- 4. Apply the Status Flag based on the ±20% threshold
+SELECT
+ vin,
+ make,
+ model,
+ machine_working_hours,
+ peer_avg_hours,
+ variance_percentage,
+  -- The Status Flag
+ CASE
+   WHEN variance_percentage >= 20.00 THEN 'Overutilized'
+   WHEN variance_percentage <= -20.00 THEN 'Underutilized'
+   ELSE 'Normal'
+ END AS utilization_status
+
+
+FROM variance_calculations
+ORDER BY variance_percentage DESC;

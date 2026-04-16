@@ -1,0 +1,12 @@
+SELECT
+    t.recorded_at AS last_used_time,
+    t.vin,
+    s.address AS site_address,
+    t.latitude,
+    t.longitude,
+    t.engine_state 
+FROM telematics_data t 
+LEFT JOIN sites s ON t.site_id = s.site_id 
+WHERE t.vin = '02F1C89C8A1D4272A' 
+ORDER BY t.recorded_at DESC 
+LIMIT 1 

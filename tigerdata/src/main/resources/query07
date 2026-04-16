@@ -1,0 +1,24 @@
+WITH rolled_up_states AS (
+ SELECT
+   vin,
+   rollup(state_summary) AS month_summary
+ FROM daily_machine_usage
+ WHERE usage_date >= NOW() - INTERVAL '30 days'
+ GROUP BY vin
+),
+durations AS (
+ SELECT
+   vin,
+   EXTRACT(EPOCH FROM duration_in(month_summary, 'Idle')) AS idle_seconds,
+   EXTRACT(EPOCH FROM duration_in(month_summary, 'Working')) AS working_seconds
+ FROM rolled_up_states
+)
+SELECT
+ vin,
+ ROUND(((idle_seconds + working_seconds) / 3600.0)::numeric, 2) AS total_engine_hours,
+ ROUND(
+   (idle_seconds / NULLIF(idle_seconds + working_seconds, 0) * 100)::numeric,
+ 2) AS idle_percentage
+FROM durations
+WHERE (idle_seconds + working_seconds) > 0
+ORDER BY idle_percentage DESC;

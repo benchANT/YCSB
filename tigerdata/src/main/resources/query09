@@ -1,0 +1,44 @@
+WITH bucket_calculations AS (
+ -- 1. Extract the raw durations and total fuel drop for every 15m bucket
+ SELECT
+   vin,
+   CASE
+     WHEN starting_fuel > ending_fuel THEN starting_fuel - ending_fuel
+     ELSE 0
+   END AS fuel_dropped_pct,
+   EXTRACT(EPOCH FROM duration_in(state_summary, 'Working')) AS working_seconds,
+   EXTRACT(EPOCH FROM duration_in(state_summary, 'Idle')) AS idle_seconds
+ FROM fleet_metrics_15m
+ WHERE hourly_bucket >= NOW() - INTERVAL '30 days' -- Note: hourly_bucket is the 15m column
+),
+allocated_fuel AS (
+ -- 2. Split the 15m fuel drop proportionally between Working and Idle
+ SELECT
+   vin,
+   working_seconds,
+   idle_seconds,
+   COALESCE(fuel_dropped_pct * (working_seconds / NULLIF(working_seconds + idle_seconds, 0)), 0) AS working_fuel_pct,
+   COALESCE(fuel_dropped_pct * (idle_seconds / NULLIF(working_seconds + idle_seconds, 0)), 0) AS idle_fuel_pct
+ FROM bucket_calculations
+),
+state_totals AS (
+ -- 3. Sum everything up for the entire 30-day period
+ SELECT
+   vin,
+   SUM(working_seconds) / 3600.0 AS total_working_hours,
+   SUM(idle_seconds) / 3600.0 AS total_idle_hours,
+   SUM(working_fuel_pct) AS total_working_fuel_pct,
+   SUM(idle_fuel_pct) AS total_idle_fuel_pct
+ FROM allocated_fuel
+ GROUP BY vin
+)
+-- 4. Calculate the final percentage per hour metrics
+SELECT
+ vin,
+ ROUND(total_working_hours::numeric, 2) AS working_hours,
+ ROUND(total_idle_hours::numeric, 2) AS idle_hours,
+ ROUND((total_working_fuel_pct / NULLIF(total_working_hours, 0))::numeric, 2) AS working_fuel_pct_per_hour,
+ ROUND((total_idle_fuel_pct / NULLIF(total_idle_hours, 0))::numeric, 2) AS idle_fuel_pct_per_hour
+FROM state_totals
+WHERE total_working_hours > 0 OR total_idle_hours > 0
+ORDER BY idle_fuel_pct_per_hour DESC;

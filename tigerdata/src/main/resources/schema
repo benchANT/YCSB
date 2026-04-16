@@ -1,0 +1,48 @@
+-- Track the physical machines
+CREATE TABLE machines (
+ vin TEXT PRIMARY KEY,
+ make TEXT, -- e.g., Caterpillar, Komatsu, Volvo
+ model TEXT,
+ weight_class_tons FLOAT,
+ purchase_date DATE,
+ current_status TEXT DEFAULT 'Available' -- Available, In Use, Maintenance, Decommissioned
+);
+
+
+-- Track the operators assigned to the machines
+CREATE TABLE operators (
+ operator_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ first_name VARCHAR(100) NOT NULL,
+ last_name VARCHAR(100) NOT NULL
+);
+
+
+CREATE TABLE sites (
+ site_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ address TEXT NOT NULL,
+ is_active BOOLEAN DEFAULT TRUE,
+ construction_begin TIMESTAMPTZ NOT NULL,
+ construction_end TIMESTAMPTZ NOT NULL
+);
+
+
+CREATE TABLE telematics_data (
+  recorded_at TIMESTAMPTZ NOT NULL,
+  vin TEXT REFERENCES machines(vin),
+  operator_id UUID REFERENCES operators(operator_id),
+  site_id INT REFERENCES sites(site_id),
+  latitude FLOAT,
+  longitude FLOAT,
+  engine_state TEXT, -- Off, Idle, Working
+  fuel_level_percent FLOAT,
+  engine_rpm INT,
+  coolant_temperature FLOAT,
+  hydraulic_oil_temperature FLOAT
+) WITH (
+ tsdb.hypertable,
+ tsdb.segmentby = 'vin',
+ tsdb.orderby = 'recorded_at DESC'
+);
+
+CREATE INDEX idx_telematics_operator ON telematics_data (operator_id);
+CREATE INDEX idx_telematics_site ON telematics_data (site_id);
