@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.htrace.core.Tracer;
 
-import site.ycsb.BasicTSDB;
 import site.ycsb.ByteIterator;
 import site.ycsb.Client;
 import site.ycsb.CoreDB;
