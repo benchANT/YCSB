@@ -5,7 +5,7 @@ public final class RtIotSensorData {
     private long timestamp;
     private long machineId;
     private long operatorId;
-    private long siteId;
+    private int siteId;
     private float latitude;
     private float longitude;
     private String engineState;
@@ -31,6 +31,50 @@ public final class RtIotSensorData {
             '}';
     }
 
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    public String getVin() {
+        return "VIN-" + machineId;
+    }
+
+    public long getOperatorId() {
+        return operatorId;
+    }
+
+    public int getSiteId() {
+        return siteId;
+    }
+
+    public float getLatitude() {
+        return latitude;
+    }
+
+    public float getLongitude() {
+        return longitude;
+    }
+
+    public String getEngineState() {
+        return engineState;
+    }
+
+    public float getFuelLevelPercent() {
+        return fuelLevelPercent;
+    }
+
+    public int getEngineRpm() {
+        return engineRpm;
+    }
+
+    public float getCoolantTemperature() {
+        return coolantTemperature;
+    }
+
+    public float getHydraulicOilTemperature() {
+        return hydraulicOilTemperature;
+    }
+
     public RtIotSensorData withTimestamp(long timestamp) {
       this.timestamp = timestamp;
       return this;
@@ -46,7 +90,7 @@ public final class RtIotSensorData {
       return this;
     }
 
-    public RtIotSensorData withSiteId(long siteId) {
+    public RtIotSensorData withSiteId(int siteId) {
       this.siteId = siteId;
       return this;
     }

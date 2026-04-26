@@ -10,6 +10,18 @@ public final class RtIotOperatorData {
         return firstName + " " + lastName;
     }
 
+    public long getOperatorId() {
+        return operatorId;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
     @Override
     public String toString() {
         return "RtIotOperatorData{" +

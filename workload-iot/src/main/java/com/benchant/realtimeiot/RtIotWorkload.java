@@ -107,13 +107,13 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
     */
     @Override
     public boolean doInsert(RtIotDb db, Object threadState) {
-        if(doOperatorInsert(db, threadState)) {
+        if(!configuration.skipOperators && doOperatorInsert(db, threadState)) {
             return true;
         }
-        if(doSitesInsert(db, threadState)) {
+        if(!configuration.skipSites && doSitesInsert(db, threadState)) {
             return true;
         }
-        if(doMachinesInsert(db, threadState)) {
+        if(!configuration.skipMachines && doMachinesInsert(db, threadState)) {
             return true;
         }
         return doTelemetryInsert(db, threadState);
@@ -187,7 +187,7 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
     }
 
     private boolean generateSenderBatch(long senderId, List<RtIotSensorData> batchEntries) {
-        long siteId = siteGenerator.nextValue().longValue();
+        int siteId = siteGenerator.nextValue().intValue();
         // this is a very simple approach: we pick the next sender group to be processed
         // then we generate one entry per machine in the sender group for the start time
         // and so on until we have generated enough for one sender interval. 
@@ -216,7 +216,7 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
         return false;
     }
 
-    private RtIotSensorData generateMachineEntry(long machineId, long senderId, long siteId, long timestamp) {
+    private RtIotSensorData generateMachineEntry(long machineId, long senderId, int siteId, long timestamp) {
         return new RtIotSensorData()
             .withMachineId(machineId)
             .withSiteId(siteId)

@@ -17,6 +17,9 @@ public final class RtIotConfiguration {
     public static final String PROP_OPERATORS = "riot.operators";
     public static final String PROP_MACHINE_FREQUENCY = "riot.machine_frequency";
     public static final String PROP_SENDER_FREQUENCY = "riot.sender_frequency";
+    public static final String SKIP_OPERATORS = "riot.skip_operators";
+    public static final String SKIP_SITES = "riot.skip_sites";
+    public static final String SKIP_MACHINES = "riot.skip_machines";
 
     // Property defaults
     public static final String DEFAULT_START_TIME = "2026-01-01T00:00:00Z";
@@ -37,9 +40,13 @@ public final class RtIotConfiguration {
     int senderFrequency;
     int sites;
     int operators;
-    
+
+    boolean skipOperators;
+    boolean skipSites;
+    boolean skipMachines;
+
     RtIotConfiguration(Properties properties) throws WorkloadException {
-                // Parse start time
+        // Parse start time
         this.startTime = PropertyParser.parseInstantProperty(properties, PROP_START_TIME, Instant.parse(DEFAULT_START_TIME));
         // Parse stop time
         this.stopTime = PropertyParser.parseInstantProperty(properties, PROP_STOP_TIME, Instant.parse(DEFAULT_STOP_TIME));
@@ -81,6 +88,10 @@ public final class RtIotConfiguration {
         if (this.operators <= 0) {
             throw new WorkloadException("Operators must be greater than 0, got: " + this.operators);
         }
+        this.skipOperators = PropertyParser.parseBooleanProperty(properties, SKIP_OPERATORS, false);
+        this.skipSites = PropertyParser.parseBooleanProperty(properties, SKIP_SITES, false);
+        this.skipMachines = PropertyParser.parseBooleanProperty(properties, SKIP_MACHINES, false);
+        
         // log the parsed configuration
         System.err.println("Configuration:");
         System.err.println("Start Time: " + this.startTime);
@@ -91,5 +102,8 @@ public final class RtIotConfiguration {
         System.err.println("Operators: " + this.operators);
         System.err.println("Machine Frequency: " + this.machineFrequency);
         System.err.println("Sender Frequency: " + this.senderFrequency);
+        System.err.println("Skip Operators: " + this.skipOperators);
+        System.err.println("Skip Sites: " + this.skipSites);
+        System.err.println("Skip Machines: " + this.skipMachines);
     }
 }

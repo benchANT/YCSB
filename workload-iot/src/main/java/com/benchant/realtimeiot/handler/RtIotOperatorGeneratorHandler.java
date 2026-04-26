@@ -31,7 +31,7 @@ public final class RtIotOperatorGeneratorHandler {
     public boolean generateOperatorBatch(List<RtIotOperatorData> batchEntries) {
         int maxOperatorId = operatorIdCounter.addAndGet(OPERATOR_BATCH_SIZE);
         for (int i = 0; i < OPERATOR_BATCH_SIZE; i++) {
-            int operatorId = maxOperatorId - OPERATOR_BATCH_SIZE + i + 1;
+            int operatorId = maxOperatorId - OPERATOR_BATCH_SIZE + i;
             if(operatorId > totalOperators) {
                 break;
             }

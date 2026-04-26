@@ -9,6 +9,30 @@ public final class RtIotMachineData {
     private long purchaseDate;
     private String currentStatus;
 
+    public String getVin() {
+        return vin;
+    }
+
+    public String getMake() {
+        return make;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public float getWeightClassTons() {
+        return weightClassTons;
+    }
+
+    public long getPurchaseDate() {
+        return purchaseDate;
+    }
+
+    public String getCurrentStatus() {
+        return currentStatus;
+    }
+
     public RtIotMachineData withVin(String vin) {
         this.vin = vin;
         return this;
@@ -37,5 +61,17 @@ public final class RtIotMachineData {
     public RtIotMachineData withCurrentStatus(String currentStatus) {
         this.currentStatus = currentStatus;
         return this;
+    }
+
+    @Override
+    public String toString() {
+        return "RtIotMachineData{" +
+                "vin='" + vin + '\'' +
+                ", make='" + make + '\'' +
+                ", model='" + model + '\'' +
+                ", weightClassTons=" + weightClassTons +
+                ", purchaseDate=" + purchaseDate +
+                ", currentStatus='" + currentStatus + '\'' +
+                '}';
     }
 }

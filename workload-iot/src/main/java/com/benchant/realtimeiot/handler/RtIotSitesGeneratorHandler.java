@@ -31,7 +31,7 @@ public final class RtIotSitesGeneratorHandler {
     public boolean generateSitesBatch(List<RtIotSitesData> batchEntries) {
         int maxSiteId = siteIdCounter.addAndGet(SITES_BATCH_SIZE);
         for (int i = 0; i < SITES_BATCH_SIZE; i++) {
-            int siteId = maxSiteId - SITES_BATCH_SIZE + i + 1;
+            int siteId = maxSiteId - SITES_BATCH_SIZE + i;
             if(siteId > totalSites) {
                 break;
             }
@@ -40,9 +40,10 @@ public final class RtIotSitesGeneratorHandler {
         return batchEntries.size() == 0;
     }
 
-    private RtIotSitesData generateSitesEntry(long siteId) {
+    private RtIotSitesData generateSitesEntry(int siteId) {
         long startTime = (long)(Math.random() * 1000000000);
         return new RtIotSitesData()
+            .withSiteId(siteId)
             .withAddress("Address" + new RandomByteIterator(addressLengthGenerator.nextValue().longValue()))
             .withIsActive(Math.random() < 0.8)
             .withConstructionBegin(startTime)

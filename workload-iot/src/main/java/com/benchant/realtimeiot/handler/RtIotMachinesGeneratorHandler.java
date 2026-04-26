@@ -34,7 +34,7 @@ public final class RtIotMachinesGeneratorHandler {
     public boolean generateMachinesBatch(List<RtIotMachineData> batchEntries) {
         int maxMachineId = machinesIdCounter.addAndGet(MACHINE_BATCH_SIZE);
         for (int i = 0; i < MACHINE_BATCH_SIZE; i++) {
-            int machineId = maxMachineId - MACHINE_BATCH_SIZE + i + 1;
+            int machineId = maxMachineId - MACHINE_BATCH_SIZE + i;
             if(machineId > totalMachines) {
                 break;
             }
