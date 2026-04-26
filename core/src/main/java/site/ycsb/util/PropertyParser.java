@@ -39,6 +39,14 @@ public final class PropertyParser {
         }
     }
 
+    public static boolean parseBooleanProperty(Properties properties, String propertyName, boolean defaultValue) {
+        String propertyValue = properties.getProperty(propertyName);
+        if (propertyValue == null) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(propertyValue);
+    }
+
     private PropertyParser() {
         // Prevent instantiation
     }
