@@ -27,6 +27,7 @@ import com.benchant.realtimeiot.data.RtIotOperatorData;
 import com.benchant.realtimeiot.data.RtIotSensorData;
 import com.benchant.realtimeiot.data.RtIotSitesData;
 
+import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
 import site.ycsb.Status;
 
@@ -59,6 +60,7 @@ public final class RtIotDBWrapper extends RtIotDb {
   private final String scopeStringInsertSites;
   private final String scopeStringInsertSensors;
   private final String scopeStringInsertOperators;
+  private final String scopeQuery;
 
 
   public RtIotDBWrapper(final RtIotDb db, final Tracer tracer) {
@@ -74,6 +76,7 @@ public final class RtIotDBWrapper extends RtIotDb {
     scopeStringInsertSites = simple + "#insertSites";
     scopeStringInsertSensors = simple + "#insertSensors";
     scopeStringInsertOperators = simple + "#insertOperators";
+    scopeQuery = simple + "#query";
   }
 
   /**
@@ -193,6 +196,19 @@ public final class RtIotDBWrapper extends RtIotDb {
         long en = System.nanoTime();
         measure("INSERT-SENSOR", res, ist, st, en);
         measurements.reportStatus("INSERT-SENSOR", res);
+        return res;
+      }
+    }
+
+  @Override
+  public final Status query(String queryId, Map<String, Object> params, List<HashMap<String, ByteIterator>> result){
+      try (final TraceScope span = tracer.newScope(scopeQuery+queryId)) {
+        long ist = measurements.getIntendedStartTimeNs();
+        long st = System.nanoTime();
+        Status res = db.query(queryId, params, result);
+        long en = System.nanoTime();
+        measure("Q" +queryId, res, ist, st, en);
+        measurements.reportStatus("Q" + queryId, res);
         return res;
       }
     }

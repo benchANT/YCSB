@@ -107,6 +107,10 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
     */
     @Override
     public boolean doInsert(RtIotDb db, Object threadState) {
+        if(configuration.stopTime == null) {
+            //FIXME: at a later stage, this should be running until it is "now"
+            throw new IllegalStateException("Stop time must be configured for the workload. Aborting.");
+        }
         if(!configuration.skipOperators && doOperatorInsert(db, threadState)) {
             return true;
         }

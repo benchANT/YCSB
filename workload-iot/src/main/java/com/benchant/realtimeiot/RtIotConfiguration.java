@@ -49,9 +49,9 @@ public final class RtIotConfiguration {
         // Parse start time
         this.startTime = PropertyParser.parseInstantProperty(properties, PROP_START_TIME, Instant.parse(DEFAULT_START_TIME));
         // Parse stop time
-        this.stopTime = PropertyParser.parseInstantProperty(properties, PROP_STOP_TIME, Instant.parse(DEFAULT_STOP_TIME));
+        this.stopTime = PropertyParser.parseInstantProperty(properties, PROP_STOP_TIME);
         // Validate that stop time is after start time
-        if (!this.stopTime.isAfter(this.startTime)) {
+        if (this.stopTime != null && !this.stopTime.isAfter(this.startTime)) {
             throw new WorkloadException("Stop time must be after start time. Start: " + this.startTime + ", Stop: " + this.stopTime);
         }
 
