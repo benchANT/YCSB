@@ -14,6 +14,15 @@ public final class PropertyParser {
         }
     }
 
+    public static Instant parseInstantProperty(Properties properties, String propertyName) {
+        String propertyValue = properties.getProperty(propertyName);
+        try {
+            return propertyValue == null || propertyValue.trim().isEmpty() ? null : Instant.parse(propertyValue);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid " + propertyName + " format: " + propertyValue, e);
+        }
+    }
+
     public static int parseIntProperty(Properties properties, String propertyName, int defaultValue) {
         String propertyValue = properties.getProperty(propertyName);
         if (propertyValue == null) {
