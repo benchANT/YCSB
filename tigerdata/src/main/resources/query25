@@ -1,36 +1,37 @@
-WITH daily_site_activity AS (
- -- 1. Calculate the exact minutes each machine spent in each state per site, per day
- SELECT
-   time_bucket('1 day', recorded_at)::date AS usage_date,
-   site_id,
-   vin,
-   -- Assuming a 1-ping-per-minute rate. (Adjust if your hardware pings differently!)
-   COUNT(*) FILTER (WHERE engine_state = 'Working') AS working_minutes,
-   COUNT(*) FILTER (WHERE engine_state = 'Idle') AS idle_minutes
- FROM telematics_data
- WHERE recorded_at >= NOW() - INTERVAL '7 days'
-   AND site_id IS NOT NULL
- GROUP BY usage_date, site_id, vin
-),
-wasted_machine_days AS (
- -- 2. Flag machines that were turned on but failed to do 1 hour of meaningful work
- SELECT
-   site_id,
-   usage_date,
-   vin,
-   CASE WHEN working_minutes < 60 THEN 1 ELSE 0 END AS is_wasted_day
- FROM daily_site_activity
- WHERE (working_minutes + idle_minutes) > 0
-)
+WITH daily_site_activity AS ( 
+ SELECT 
+   time_bucket('1 day', recorded_at)::date AS usage_date, 
+   site_id, 
+   vin, 
+   COUNT(*) FILTER (WHERE engine_state = 'Working') AS working_minutes, 
+   COUNT(*) FILTER (WHERE engine_state = 'Idle') AS idle_minutes 
+ FROM telematics_data 
+ WHERE recorded_at >= INTERVAL_PLACEHOLDER 
+   AND site_id IS NOT NULL 
+ GROUP BY usage_date, site_id, vin 
+), 
+wasted_machine_days AS ( 
+ SELECT 
+   site_id, 
+   usage_date, 
+   vin, 
+   CASE WHEN working_minutes < 60 THEN 1 ELSE 0 END AS is_wasted_day 
+ FROM daily_site_activity 
+ WHERE (working_minutes + idle_minutes) > 0 
+) 
+SELECT 
+ w.site_id, 
+ s.address AS site_name, 
+ COUNT(w.vin) AS total_active_machine_days, 
+ SUM(w.is_wasted_day) AS wasted_machine_days, 
+ ROUND((SUM(w.is_wasted_day)::numeric / COUNT(w.vin)) * 100, 2) AS percent_wasted 
+FROM wasted_machine_days w 
+JOIN sites s ON w.site_id = s.site_id 
+GROUP BY w.site_id, s.address 
+HAVING SUM(w.is_wasted_day) > 0 
+ORDER BY wasted_machine_days DESC, percent_wasted DESC
+
+-- 1. Calculate the exact minutes each machine spent in each state per site, per day
+-- Assuming a 1-ping-per-minute rate. (Adjust if your hardware pings differently!)
+-- 2. Flag machines that were turned on but failed to do 1 hour of meaningful work
 -- 3. Roll up the data to see which sites are the worst offenders
-SELECT
- w.site_id,
- s.address AS site_name,
- COUNT(w.vin) AS total_active_machine_days,
- SUM(w.is_wasted_day) AS wasted_machine_days,
- ROUND((SUM(w.is_wasted_day)::numeric / COUNT(w.vin)) * 100, 2) AS percent_wasted
-FROM wasted_machine_days w
-JOIN sites s ON w.site_id = s.site_id
-GROUP BY w.site_id, s.address
-HAVING SUM(w.is_wasted_day) > 0
-ORDER BY wasted_machine_days DESC, percent_wasted DESC;

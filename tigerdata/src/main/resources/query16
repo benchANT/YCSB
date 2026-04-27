@@ -1,35 +1,37 @@
-WITH daily_site_presence AS (
- -- 1. Determine daily presence and activity for each machine at each site
- SELECT
-   time_bucket('1 day', recorded_at)::date AS usage_date,
-   site_id,
-   vin,
-   -- Flag as 1 if the machine was turned on at all that day
-   MAX(CASE WHEN engine_state IN ('Working', 'Idle') THEN 1 ELSE 0 END) AS is_active
- FROM telematics_data
- WHERE recorded_at >= NOW() - INTERVAL '7 days'
-   AND site_id IS NOT NULL
- GROUP BY usage_date, site_id, vin
-),
-weekly_site_rollup AS (
- -- 2. Sum up the total potential days vs. actual active days per site
- SELECT
+WITH daily_site_presence AS ( 
+  SELECT 
+   time_bucket('1 day', recorded_at)::date AS usage_date, 
+   site_id, 
+   vin, 
+   MAX(CASE WHEN engine_state IN ('Working', 'Idle') THEN 1 ELSE 0 END) AS is_active 
+ FROM telematics_data 
+ WHERE recorded_at >= INTERVAL_PLACEHOLDER 
+   AND site_id IS NOT NULL 
+ GROUP BY usage_date, site_id, vin 
+), 
+weekly_site_rollup AS ( 
+ SELECT 
    site_id,
    COUNT(vin) AS total_machine_days,
    SUM(is_active) AS active_machine_days
  FROM daily_site_presence
- GROUP BY site_id
-)
+ GROUP BY site_id 
+) 
+SELECT 
+ w.site_id, 
+ s.address AS site_name, 
+ w.active_machine_days, 
+ w.total_machine_days, 
+ ROUND((w.active_machine_days::numeric / NULLIF(w.total_machine_days, 0)) * 100, 2) AS weekly_utilization_pct 
+FROM weekly_site_rollup w 
+JOIN sites s ON w.site_id = s.site_id  
+WHERE w.total_machine_days > 5 
+ORDER BY weekly_utilization_pct ASC 
+LIMIT 50 
+
+
+-- 1. Determine daily presence and activity for each machine at each site
+  -- Flag as 1 if the machine was turned on at all that day
+ -- 2. Sum up the total potential days vs. actual active days per site
 -- 3. Calculate the final weekly utilization percentage
-SELECT
- w.site_id,
- s.address AS site_name,
- w.active_machine_days,
- w.total_machine_days,
- ROUND((w.active_machine_days::numeric / NULLIF(w.total_machine_days, 0)) * 100, 2) AS weekly_utilization_pct
-FROM weekly_site_rollup w
-JOIN sites s ON w.site_id = s.site_id
 -- Optional: Filter out tiny sites that only had 1 or 2 machine-days total to avoid skewed data
-WHERE w.total_machine_days > 5
-ORDER BY weekly_utilization_pct ASC
-LIMIT 50;

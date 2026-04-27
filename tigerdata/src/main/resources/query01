@@ -6,6 +6,6 @@ SELECT
   duration_in(state_agg(recorded_at, engine_state), 'Working') +
   duration_in(state_agg(recorded_at, engine_state), 'Idle') AS total_operating_time 
 FROM telematics_data 
-WHERE site_id = 219323 
-   AND recorded_at >= NOW() - INTERVAL '1 month' 
+WHERE site_id = ?  
+AND recorded_at >= INTERVAL_PLACEHOLDER 
 GROUP BY 1, 2

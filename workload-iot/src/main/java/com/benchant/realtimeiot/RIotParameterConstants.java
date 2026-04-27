@@ -7,4 +7,8 @@ public interface RIotParameterConstants {
     public static final String MACHINE_ID = "machineId";
     public static final String SENSOR_ID = "sensorId";
     public static final String TIMESTAMP_UPPER = "timestamp_upper";
+
+    public static String longToMachineId(long mid) {
+        return "VIN-" + mid;
+    }
 }

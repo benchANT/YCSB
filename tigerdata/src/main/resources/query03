@@ -1,12 +1,12 @@
-WITH latest_locations AS (
- SELECT DISTINCT ON (vin)
-   vin,
-   site_id,
-   recorded_at
- FROM telematics_data
- ORDER BY vin, recorded_at DESC
-) 
-SELECT site_id, COUNT(vin) AS total_machines_on_site 
-FROM latest_locations 
-GROUP BY site_id 
-ORDER BY 2 DESC 
+WITH latest_locations AS ( 
+ SELECT DISTINCT ON (vin) 
+   vin, 
+   site_id, 
+   recorded_at 
+ FROM telematics_data 
+ ORDER BY vin, recorded_at DESC 
+)  
+SELECT site_id, COUNT(vin) AS total_machines_on_site  
+FROM latest_locations  
+GROUP BY site_id  
+ORDER BY 2 DESC  

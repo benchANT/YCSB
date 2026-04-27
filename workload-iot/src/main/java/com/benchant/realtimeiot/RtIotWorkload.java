@@ -220,12 +220,12 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
         return false;
     }
 
-    private RtIotSensorData generateMachineEntry(long machineId, long senderId, int siteId, long timestamp) {
+    private RtIotSensorData generateMachineEntry(long machineId, long senderId, int siteId, long timestampSeconds) {
         return new RtIotSensorData()
             .withMachineId(machineId)
             .withSiteId(siteId)
             .withOperatorId(operatorGenerator.nextValue().longValue())
-            .withTimestamp(timestamp)
+            .withTimestamp(timestampSeconds * 1000) // transfer seconds to millis
             .withLatitude(RtIotHelper.generateLatitude())
             .withLongitude(RtIotHelper.generateLongitude())
             .withEngineState(engineStateGenerator.nextValue())

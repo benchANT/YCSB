@@ -1,22 +1,22 @@
-WITH last_10_minutes AS (
-SELECT
-  vin,
-  MAX(hydraulic_oil_temperature) AS max_oil_temp,
-  MIN(engine_rpm) AS min_rpm,
-  COUNT(recorded_at) AS ping_count
-FROM telematics_data
-WHERE recorded_at >= NOW() - INTERVAL '10 minutes'
-GROUP BY vin
-)
-SELECT
-vin,
-max_oil_temp,
-min_rpm,
-CASE
-  WHEN max_oil_temp > 90 THEN 'CRITICAL: Oil Temperature Exceeded 90°C'
-  WHEN min_rpm > 2000 THEN 'WARNING: RPM consistently over 2000 for 10 minutes'
-END AS alert_reason
-FROM last_10_minutes
-WHERE max_oil_temp > 90 OR (min_rpm > 2000 AND ping_count > 2)
+WITH last_10_minutes AS ( 
+SELECT 
+  vin, 
+  MAX(hydraulic_oil_temperature) AS max_oil_temp, 
+  MIN(engine_rpm) AS min_rpm, 
+  COUNT(recorded_at) AS ping_count 
+FROM telematics_data 
+WHERE recorded_at >= INTERVAL_PLACEHOLDER 
+GROUP BY vin 
+) 
+SELECT 
+vin, 
+max_oil_temp, 
+min_rpm, 
+CASE 
+  WHEN max_oil_temp > 90 THEN 'CRITICAL: Oil Temperature Exceeded 90°C' 
+  WHEN min_rpm > 2000 THEN 'WARNING: RPM consistently over 2000 for 10 minutes' 
+END AS alert_reason 
+FROM last_10_minutes 
+WHERE max_oil_temp > 90 OR (min_rpm > 2000 AND ping_count > 2) 
 
 -- Require at least a few pings to avoid false positives on a single reading

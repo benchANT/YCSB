@@ -22,7 +22,7 @@ import site.ycsb.workloads.CoreWorkload;
 
 public final class RIotQueryWorkload extends Workload<RtIotDb> {
 
-    public static final int MAX_NUM_QUERIES = 15;
+    public static final int MAX_NUM_QUERIES = 32;
     private static final int MAX_QUERY_DIGITS = Math.max(computeDigits(MAX_NUM_QUERIES), 2);
     /**
      * The query ids to use for this benchmark run.

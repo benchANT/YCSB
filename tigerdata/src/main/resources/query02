@@ -7,6 +7,6 @@ SELECT
     t.engine_state 
 FROM telematics_data t 
 LEFT JOIN sites s ON t.site_id = s.site_id 
-WHERE t.vin = '02F1C89C8A1D4272A' 
+WHERE t.vin = ? 
 ORDER BY t.recorded_at DESC 
 LIMIT 1 

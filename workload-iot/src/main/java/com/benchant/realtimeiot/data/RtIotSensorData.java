@@ -1,5 +1,7 @@
 package com.benchant.realtimeiot.data;
 
+import com.benchant.realtimeiot.RIotParameterConstants;
+
 public final class RtIotSensorData {
 
     private long timestamp;
@@ -36,7 +38,7 @@ public final class RtIotSensorData {
     }
 
     public String getVin() {
-        return "VIN-" + machineId;
+        return RIotParameterConstants.longToMachineId(machineId);
     }
 
     public long getOperatorId() {
