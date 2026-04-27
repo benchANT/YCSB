@@ -1,77 +1,36 @@
 package site.ycsb.db;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.Date;
+import java.sql.JDBCType;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.ArrayList;
+import java.sql.Timestamp;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import com.benchant.realtimeiot.QueryRegistry;
 import com.benchant.realtimeiot.RtIotDb;
 import com.benchant.realtimeiot.data.RtIotMachineData;
 import com.benchant.realtimeiot.data.RtIotOperatorData;
 import com.benchant.realtimeiot.data.RtIotSensorData;
 import com.benchant.realtimeiot.data.RtIotSitesData;
 
+import site.ycsb.ByteIterator;
 import site.ycsb.DBException;
+import site.ycsb.NumericByteIterator;
 import site.ycsb.Status;
-import site.ycsb.util.PropertyParser;
+import site.ycsb.StringByteIterator;
 
 public class TigerDataClient extends RtIotDb {
 
-  /** The class to use as the jdbc driver. */
-  public static final String DRIVER_CLASS = "db.driver";
-
-  /** The URL to connect to the database. */
-  public static final String CONNECTION_URL = "db.url";
-
-  /** The user name to use to connect to the database. */
-  public static final String CONNECTION_USER = "db.user";
-
-  /** The password to use for establishing the connection. */
-  public static final String CONNECTION_PASSWD = "db.passwd";
-
-  /** The batch size for batched inserts. Set to >0 to use batching */
-  public static final String DB_BATCH_SIZE = "db.batchsize";
-
-  /** The JDBC fetch size hinted to the driver. */
-  public static final String JDBC_FETCH_SIZE = "jdbc.fetchsize";
-
-  /** The JDBC connection auto-commit property for the driver. */
-  public static final String JDBC_AUTO_COMMIT = "jdbc.autocommit";
-
-  public static final String JDBC_BATCH_UPDATES = "jdbc.batchupdateapi";
-
-  /** The name of the property for the number of fields in a record. */
-  public static final String FIELD_COUNT_PROPERTY = "fieldcount";
-
-  /** Default number of fields in a record. */
-  public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
-
-  /** Representing a NULL value. */
-  public static final String NULL_VALUE = "NULL";
-
-  /** The primary key in the user table. */
-  public static final String PRIMARY_KEY = "YCSB_KEY";
-
-  /** The field name prefix in the table. */
-  public static final String COLUMN_PREFIX = "FIELD";
-
-  private Connection connection;
-  private boolean initialized = false;
-  private Properties props;
-  private int jdbcFetchSize;
-  private int batchSize;
-  private boolean autoCommit;
-  private boolean batchUpdates;
-  private static final String DEFAULT_PROP = "";
+  private final TigerDataConfig config = new TigerDataConfig();
   private ConcurrentMap<String, PreparedStatement> cachedInsertStatements = new ConcurrentHashMap<String, PreparedStatement>();
-  private long numRowsInOperatorsBatch = 0;
-  private long numRowsInSitesBatch = 0;
-  private long numRowsInMachinesBatch = 0;
+  private ConcurrentMap<String, PreparedStatement> cachedQueryStatements = new ConcurrentHashMap<String, PreparedStatement>();
+
   /**
    * Ordered field information for insert and update statements.
 
@@ -120,45 +79,16 @@ public class TigerDataClient extends RtIotDb {
 
   @Override
   public void init() throws DBException {
-    if (initialized) {
+    if (config.initialized) {
       System.err.println("Client connection already initialized.");
       return;
     }
-    props = getProperties();
-    String url = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
-    String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
-    String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
-    String driver = props.getProperty(DRIVER_CLASS);
-
-    this.jdbcFetchSize = PropertyParser.parseIntProperty(props, JDBC_FETCH_SIZE, -1);
-    this.batchSize = PropertyParser.parseIntProperty(props, DB_BATCH_SIZE, -1);
-
-    this.autoCommit = PropertyParser.parseBooleanProperty(props, JDBC_AUTO_COMMIT, true);
-    this.batchUpdates = PropertyParser.parseBooleanProperty(props, JDBC_BATCH_UPDATES, false);
-
+    
     try {
-//  The SQL Syntax for Scan depends on the DB engine
-//  - SQL:2008 standard: FETCH FIRST n ROWS after the ORDER BY
-//  - SQL Server before 2012: TOP n after the SELECT
-//  - others (MySQL,MariaDB, PostgreSQL before 8.4)
-//  TODO: check product name and version rather than driver name
+        config.init(getProperties());
+        initInsertPreparedStatements();
+    }
     /*
-      if (driver != null) {
-        if (driver.contains("sqlserver")) {
-          sqlserverScans = true;
-          sqlansiScans = false;
-        }
-        if (driver.contains("oracle")) {
-          sqlserverScans = false;
-          sqlansiScans = true;
-        }
-        if (driver.contains("postgres")) {
-          sqlserverScans = false;
-          sqlansiScans = true;
-        }
-        Class.forName(driver);
-      }
-      */
       connection = DriverManager.getConnection(url, user, passwd);
       connection.setAutoCommit(autoCommit);
       // for a longer explanation see the README.md
@@ -175,57 +105,32 @@ public class TigerDataClient extends RtIotDb {
       System.err.println("Invalid value for fieldcount property. " + e);
       throw new DBException(e);
     }
-
-    initialized = true;
+    config.initialized = true;
   }
 
   private void initInsertPreparedStatements() throws SQLException {
     if (!cachedInsertStatements.containsKey(InsertHelper.OPERATOR_KEY)) {
-      PreparedStatement operatorInsertStatement = connection.prepareStatement(InsertHelper.OPERATOR_INSERT_STRING);
+      PreparedStatement operatorInsertStatement = config.connection.prepareStatement(InsertHelper.OPERATOR_INSERT_STRING);
       cachedInsertStatements.put(InsertHelper.OPERATOR_KEY, operatorInsertStatement);
     }
     if (!cachedInsertStatements.containsKey(InsertHelper.SITES_KEY)) {
-      PreparedStatement siteInsertStatement = connection.prepareStatement(InsertHelper.SITES_INSERT_STRING);
+      PreparedStatement siteInsertStatement = config.connection.prepareStatement(InsertHelper.SITES_INSERT_STRING);
       cachedInsertStatements.put(InsertHelper.SITES_KEY, siteInsertStatement);
     }
     if (!cachedInsertStatements.containsKey(InsertHelper.MACHINES_KEY)) {
-      PreparedStatement machineInsertStatement = connection.prepareStatement(InsertHelper.MACHINES_INSERT_STRING);
+      PreparedStatement machineInsertStatement = config.connection.prepareStatement(InsertHelper.MACHINES_INSERT_STRING);
       cachedInsertStatements.put(InsertHelper.MACHINES_KEY, machineInsertStatement);
     }
 
     if (!cachedInsertStatements.containsKey(InsertHelper.TELEMETRY_KEY)) {
-      PreparedStatement telemetryInsertStatement = connection.prepareStatement(InsertHelper.TELEMETRY_INSERT_STRING);
+      PreparedStatement telemetryInsertStatement = config.connection.prepareStatement(InsertHelper.TELEMETRY_INSERT_STRING);
       cachedInsertStatements.put(InsertHelper.TELEMETRY_KEY, telemetryInsertStatement);
     }
   }
 
   @Override
   public void cleanup() throws DBException {
-    if (batchSize > 0) {
-      try {
-        PreparedStatement st = cachedInsertStatements.get(InsertHelper.OPERATOR_KEY);
-        if (!st.getConnection().isClosed() && !st.isClosed() && (numRowsInOperatorsBatch % batchSize != 0)) {
-            st.executeBatch();
-        }
-        // commit un-finished batches
-        /* FIXME
-        for (PreparedStatement st : cachedInsertStatements.values()) {
-          if (!st.getConnection().isClosed() && !st.isClosed() && (numRowsInBatch % batchSize != 0)) {
-            st.executeBatch();
-          }
-        }*/
-      } catch (SQLException e) {
-        System.err.println("Error in cleanup execution. " + e);
-        throw new DBException(e);
-      }
-    }
-
-    try {
-      connection.close();
-    } catch (SQLException e) {
-      System.err.println("Error in closing the connection. " + e);
-      throw new DBException(e);
-    }
+    config.cleanup();
   }
 
     public TigerDataClient() {
@@ -242,8 +147,8 @@ public class TigerDataClient extends RtIotDb {
                 operatorInsertStatement.addBatch();
             }
             operatorInsertStatement.executeBatch();
-            if (!autoCommit && batchSize <= 0) {
-                connection.commit();
+            if (!config.autoCommit && config.batchSize <= 0) {
+                config.connection.commit();
             }
         } catch (SQLException e) {
             System.err.println("Error in inserting operator data: " + e);
@@ -262,8 +167,8 @@ public class TigerDataClient extends RtIotDb {
                 siteInsertStatement.addBatch();
             }
             siteInsertStatement.executeBatch();
-            if (!autoCommit && batchSize <= 0) {
-                connection.commit();
+            if (!config.autoCommit && config.batchSize <= 0) {
+                config.connection.commit();
             }
         } catch (SQLException e) {
             System.err.println("Error in inserting site data: " + e);
@@ -282,8 +187,8 @@ public class TigerDataClient extends RtIotDb {
                 machineInsertStatement.addBatch();
             }
             machineInsertStatement.executeBatch();
-            if (!autoCommit && batchSize <= 0) {
-                connection.commit();
+            if (!config.autoCommit && config.batchSize <= 0) {
+                config.connection.commit();
             }
         } catch (SQLException e) {
             System.err.println("Error in inserting machine data: " + e);
@@ -302,8 +207,8 @@ public class TigerDataClient extends RtIotDb {
                 telemetryInsertStatement.addBatch();
             }
             telemetryInsertStatement.executeBatch();
-            if (!autoCommit && batchSize <= 0) {
-                connection.commit();
+            if (!config.autoCommit && config.batchSize <= 0) {
+                config. connection.commit();
             }
         } catch (SQLException e) {
             System.err.println("Error in inserting sensor data: " + e);
@@ -312,4 +217,105 @@ public class TigerDataClient extends RtIotDb {
         return Status.OK;
     }
 
+    private PreparedStatement createAndCacheReadStatement(String query) throws SQLException {
+        PreparedStatement readStatement = config.connection.prepareStatement(query);
+        PreparedStatement stmt = cachedQueryStatements.putIfAbsent(query, readStatement);
+        if (stmt == null) {
+            return readStatement;
+        }
+        return stmt;
+    }
+
+    @Override
+    public Status query(String queryId, java.util.Map<String, Object> params, List<java.util.HashMap<String, site.ycsb.ByteIterator>> result) {
+        String rawQuery = QueryRegistry.INSTANCE.getQuery(queryId);
+        if(rawQuery == null) {
+            System.err.println("query " + queryId + " not found");
+            return Status.UNEXPECTED_STATE;
+        }
+        String[] patched = QueryFiller.patchQueryString(queryId, rawQuery, params);
+        String cacheQuery = patched[1];
+        PreparedStatement readStatement = cachedQueryStatements.get(cacheQuery);
+        try {
+            if (readStatement == null) {
+                readStatement = createAndCacheReadStatement(cacheQuery);
+            }
+            QueryFiller.fillQuery(queryId, readStatement, params);
+            if(config.doDebug) {
+              System.err.println("running query: " + readStatement.toString());
+            }
+        } catch(SQLException ex ) {
+          if(config.doDebug) {
+            System.err.println("could not initialize query for " + cacheQuery);
+            ex.printStackTrace(System.err);
+          }
+          return Status.ERROR;
+        }
+        try(ResultSet resultSet = readStatement.executeQuery()){
+            if (!resultSet.next()) {
+                resultSet.close();
+                return Status.NOT_FOUND;
+            }
+            ResultSetMetaData rsmd = resultSet.getMetaData();
+            while(true) {
+              HashMap<String,ByteIterator> row = new HashMap<>();
+              for(int i = 1; i <= rsmd.getColumnCount(); i++) {
+                int intType = rsmd.getColumnType(i);
+                String label = rsmd.getColumnLabel(i);
+                if(intType == JDBCType.BIGINT.getVendorTypeNumber().intValue()) {
+                  long data = resultSet.getLong(i);
+                  row.put(label, new NumericByteIterator(data));
+                } else if(intType == JDBCType.DECIMAL.getVendorTypeNumber().intValue()){
+                  double data = resultSet.getDouble(i);
+                  row.put(label, new NumericByteIterator(data));
+                } else if(intType == JDBCType.VARCHAR.getVendorTypeNumber().intValue() || 
+                  intType == JDBCType.CHAR.getVendorTypeNumber().intValue()){
+                  String data = resultSet.getString(i);
+                  row.put(label, new StringByteIterator(data));
+                } else if(intType == JDBCType.DOUBLE.getVendorTypeNumber().intValue()){
+                  double doub = resultSet.getDouble(i);
+                  row.put(label, new NumericByteIterator(doub));
+		        } else if(intType == JDBCType.INTEGER.getVendorTypeNumber().intValue()) {
+                  long data = resultSet.getLong(i);
+                  row.put(label, new NumericByteIterator(data));		  
+		        } else if(intType == JDBCType.NUMERIC.getVendorTypeNumber().intValue()) {
+                  long data = resultSet.getLong(i);
+                  row.put(label, new NumericByteIterator(data));		  
+                } else if(intType == JDBCType.TIMESTAMP.getVendorTypeNumber().intValue()) {
+                  Timestamp data = resultSet.getTimestamp(i);
+                  row.put(label, new StringByteIterator(data.toString()));		  
+                } else if(intType == JDBCType.DATE.getVendorTypeNumber().intValue()) {
+                  Date data = resultSet.getDate(i);
+                  row.put(label, new StringByteIterator(data.toString()));		  
+                } else if (intType == JDBCType.OTHER.getVendorTypeNumber().intValue()) {
+                    //  && "state_agg".equalsIgnoreCase(rsmd.getColumnTypeName(i))
+                  // special handling for state_agg type which is returned as OTHER by the driver, but we know it is actually a long
+                  Object data = resultSet.getObject(i);
+                  // if(data.getClass().getName().equals("org.postgresql.util.PGInterval")) {
+                  if("interval".equals(rsmd.getColumnTypeName(i))) {
+                    row.put(label, new StringByteIterator(data.toString()));
+                  } else {
+                    throw new IllegalStateException("unknown OTHER type: " + intType + " / " + rsmd.getColumnTypeName(i));
+                  }
+                } else {
+                    throw new IllegalStateException("unknown type: " + intType + " / " + rsmd.getColumnTypeName(i));
+                }
+              }
+              result.add(row);
+              if(!resultSet.next()) {
+                break;
+              }
+            } 
+        } catch(SQLException ex ) {
+          if(config.doDebug) {
+            System.err.println("sqlexception with query " + queryId + ": " + ex.getErrorCode());
+            ex.printStackTrace(System.err);
+          }
+          return Status.ERROR;
+        }
+        if(config.doDebug) {
+          System.err.println("result: " + result);
+        }
+        return Status.OK;
+    }
 }
