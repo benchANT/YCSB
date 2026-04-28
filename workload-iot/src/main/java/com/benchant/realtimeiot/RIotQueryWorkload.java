@@ -40,12 +40,12 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
     // public static final String ANALYTICS_QUERY_NUMBER_PROPERTY = "tpcds.queryid";
     // public static final String ANALYTICS_QUERY_NUMBER_PROPERTY_DEFAULT = "1";
 
-    public static final String TPCDS_QUERY_SEARCH_PREFIX_PROPERTY = "tpcds.searchprefix";
+    public static final String TPCDS_QUERY_SEARCH_PREFIX_PROPERTY = "rtiot.searchprefix";
     public static final String TPCDS_QUERY_SEARCH_PREFIX_PROPERTY_DEFAULT = "";
 
-    public static final String TPCDS_QUERIES_LOWER_END = "tpcds.queries.lower";
-    public static final String TPCDS_QUERIES_UPPER_END = "tpcds.queries.upper";
-    public static final String TPCDS_QUERIES_LIST = "tpcds.queries.list";
+    public static final String TPCDS_QUERIES_LOWER_END = "rtiot.queries.lower";
+    public static final String TPCDS_QUERIES_UPPER_END = "rtiot.queries.upper";
+    public static final String TPCDS_QUERIES_LIST = "rtiot.queries.list";
 
     public static final String QUERY_PREFIX = "query";
 
