@@ -1,24 +1,25 @@
 WITH daily_ping_totals AS (
- -- 1. Roll up the 15-minute buckets into daily totals for each operator
  SELECT
    time_bucket_15m::date AS work_date,
    operator_id,
    SUM(working_ping_count) AS daily_working_pings,
    SUM(idle_ping_count) AS daily_idle_pings
  FROM operator_activity_15m
- WHERE time_bucket_15m >= NOW() - INTERVAL '30 days'
+ WHERE time_bucket_15m >= INTERVAL_PLACEHOLDER 
  GROUP BY time_bucket_15m::date, operator_id
-)
--- 2. Convert the pings into hours and join the operator names
-SELECT
+) 
+SELECT 
  d.work_date,
  o.operator_id,
  o.first_name,
  o.last_name,
  ROUND((d.daily_working_pings / 60.0)::numeric, 2) AS working_hours,
  ROUND((d.daily_idle_pings / 60.0)::numeric, 2) AS idle_hours,
- ROUND(((d.daily_working_pings + d.daily_idle_pings) / 60.0)::numeric, 2) AS total_hours_worked
-FROM daily_ping_totals d
-JOIN operators o ON d.operator_id = o.operator_id
-WHERE (d.daily_working_pings + d.daily_idle_pings) > 0
-ORDER BY d.work_date DESC, total_hours_worked DESC;
+ ROUND(((d.daily_working_pings + d.daily_idle_pings) / 60.0)::numeric, 2) AS total_hours_worked 
+FROM daily_ping_totals d 
+JOIN operators o ON d.operator_id = o.operator_id 
+WHERE (d.daily_working_pings + d.daily_idle_pings) > 0 
+ORDER BY d.work_date DESC, total_hours_worked DESC
+
+-- 1. Roll up the 15-minute buckets into daily totals for each operator
+-- 2. Convert the pings into hours and join the operator names

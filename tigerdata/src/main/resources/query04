@@ -1,11 +1,11 @@
 SELECT 
     usage_date,
     vin,
-    duration_in(state_summary, 'Working') + 
-    duration_in(state_summary, 'Idle') AS total_operating_time 
-FROM daily_machine_usage 
-WHERE vin = '786EAD64585949B98' 
-  AND usage_date >= NOW() - INTERVAL '1 month'
+    duration_in(state_summary, 'Working') +  
+    duration_in(state_summary, 'Idle') AS total_operating_time  
+FROM daily_machine_usage  
+WHERE vin = ? 
+  AND usage_date >= INTERVAL_PLACEHOLDER 
 ORDER BY usage_date DESC 
 
 -- Extract the specific durations from our pre-calculated summary

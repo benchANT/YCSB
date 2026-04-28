@@ -1,40 +1,39 @@
-WITH date_series AS (
- -- 1. Generate a continuous calendar for the last 30 days (prevents missing days like Sundays)
- SELECT time_bucket('1 day', d)::date AS usage_date
- FROM generate_series(NOW() - INTERVAL '30 days', NOW(), '1 day') AS d
-),
-fleet_size AS (
+WITH date_series AS ( 
+ SELECT time_bucket('1 day', d)::date AS usage_date 
+ FROM generate_series(INTERVAL_PLACEHOLDER_LOWER, INTERVAL_PLACEHOLDER_UPPER, '1 day') AS d 
+), 
+fleet_size AS ( 
+ SELECT 
+   ds.usage_date, 
+   COUNT(m.vin) AS total_machines 
+ FROM date_series ds 
+ LEFT JOIN machines m 
+   ON m.purchase_date <= ds.usage_date 
+   AND m.current_status != 'Decommissioned' 
+ GROUP BY ds.usage_date 
+), 
+active_machines AS ( 
+ SELECT 
+   usage_date::date AS usage_date, 
+   COUNT(vin) AS active_count 
+ FROM daily_machine_usage 
+ WHERE usage_date >= INTERVAL_PLACEHOLDER_LOWER 
+   AND EXTRACT(EPOCH FROM (duration_in(state_summary, 'Working') + duration_in(state_summary, 'Idle'))) > 0 
+ GROUP BY usage_date::date 
+) 
+SELECT 
+ f.usage_date, 
+ COALESCE(a.active_count, 0) AS deployed_and_running, 
+ f.total_machines AS total_available_fleet, 
+ CASE 
+   WHEN f.total_machines = 0 THEN 0.00 
+   ELSE ROUND((COALESCE(a.active_count, 0)::numeric / f.total_machines) * 100, 2) 
+ END AS utilization_percentage 
+FROM fleet_size f 
+LEFT JOIN active_machines a ON f.usage_date = a.usage_date 
+ORDER BY f.usage_date DESC 
+
+-- 1. Generate a continuous calendar for the last 30 days (prevents missing days like Sundays)
  -- 2. Figure out the total eligible fleet size for each day
- SELECT
-   ds.usage_date,
-   COUNT(m.vin) AS total_machines
- FROM date_series ds
- LEFT JOIN machines m
-   ON m.purchase_date <= ds.usage_date
-   AND m.current_status != 'Decommissioned'
- GROUP BY ds.usage_date
-),
-active_machines AS (
- -- 3. Count how many machines actually ran (Idle or Working) on each day
- SELECT
-   usage_date::date AS usage_date,
-   COUNT(vin) AS active_count
- FROM daily_machine_usage
- WHERE usage_date >= NOW() - INTERVAL '30 days'
-   AND EXTRACT(EPOCH FROM (duration_in(state_summary, 'Working') + duration_in(state_summary, 'Idle'))) > 0
- GROUP BY usage_date::date
-)
--- 4. Bring it all together to calculate the percentage
-SELECT
- f.usage_date,
- COALESCE(a.active_count, 0) AS deployed_and_running,
- f.total_machines AS total_available_fleet,
- CASE
-   WHEN f.total_machines = 0 THEN 0.00
-   ELSE ROUND((COALESCE(a.active_count, 0)::numeric / f.total_machines) * 100, 2)
- END AS utilization_percentage
-
-
-FROM fleet_size f
-LEFT JOIN active_machines a ON f.usage_date = a.usage_date
-ORDER BY f.usage_date DESC;
+  -- 3. Count how many machines actually ran (Idle or Working) on each day
+  -- 4. Bring it all together to calculate the percentage
