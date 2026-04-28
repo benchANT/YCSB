@@ -8,14 +8,12 @@ CREATE TABLE machines (
  current_status TEXT DEFAULT 'Available' -- Available, In Use, Maintenance, Decommissioned
 );
 
-
 -- Track the operators assigned to the machines
 CREATE TABLE operators (
  operator_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  first_name VARCHAR(100) NOT NULL,
  last_name VARCHAR(100) NOT NULL
 );
-
 
 CREATE TABLE sites (
  site_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -24,7 +22,6 @@ CREATE TABLE sites (
  construction_begin TIMESTAMPTZ NOT NULL,
  construction_end TIMESTAMPTZ NOT NULL
 );
-
 
 CREATE TABLE telematics_data (
   recorded_at TIMESTAMPTZ NOT NULL,
@@ -46,3 +43,67 @@ CREATE TABLE telematics_data (
 
 CREATE INDEX idx_telematics_operator ON telematics_data (operator_id);
 CREATE INDEX idx_telematics_site ON telematics_data (site_id);
+
+-- CAggs
+CREATE MATERIALIZED VIEW daily_machine_usage
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 day', recorded_at) AS usage_date,
+    vin,
+    state_agg(recorded_at, engine_state) AS state_summary
+FROM telematics_data
+GROUP BY usage_date, vin;
+
+
+SELECT add_continuous_aggregate_policy('daily_machine_usage',
+    start_offset => INTERVAL '3 days', 
+    end_offset => INTERVAL '1 hour',   
+    schedule_interval => INTERVAL '1 hour');
+
+
+CREATE MATERIALIZED VIEW fleet_metrics_15m
+WITH (timescaledb.continuous) AS
+SELECT
+ time_bucket('15 minutes', recorded_at) AS time_bucket_15m,
+ vin,
+ state_agg(recorded_at, engine_state) AS state_summary,
+ first(fuel_level_percent, recorded_at) AS starting_fuel,
+ last(fuel_level_percent, recorded_at) AS ending_fuel,
+ max(engine_rpm) AS max_engine_rpm,
+ min(engine_rpm) AS min_engine_rpm,
+ max(coolant_temperature) AS max_coolant_temperature,
+ min(coolant_temperature) AS min_coolant_temperature,
+ max(hydraulic_oil_temperature) AS max_hydraulic_oil_temperature,
+ min(hydraulic_oil_temperature) AS min_hydraulic_oil_temperature,
+ last(latitude, recorded_at) AS last_latitude,
+ last(longitude, recorded_at) AS last_longitude,
+ first(latitude, recorded_at) AS start_latitude,
+ first(longitude, recorded_at) AS start_longitude
+FROM telematics_data
+GROUP BY time_bucket_15m, vin;
+
+SELECT add_continuous_aggregate_policy('fleet_metrics_15m',
+   start_offset => INTERVAL '1 day',
+   end_offset => INTERVAL '15 minutes',  
+   schedule_interval => INTERVAL '15 minutes'
+);
+
+
+CREATE MATERIALIZED VIEW operator_activity_15m
+WITH (timescaledb.continuous) AS
+SELECT
+ time_bucket('15 minutes', recorded_at) AS time_bucket_15m,
+ operator_id,
+ COUNT(*) FILTER (WHERE engine_state = 'Working') AS working_ping_count,
+ COUNT(*) FILTER (WHERE engine_state = 'Idle') AS idle_ping_count,
+ COUNT(*) FILTER (WHERE engine_state = 'Off') AS off_ping_count,
+ COUNT(*) AS total_ping_count
+FROM telematics_data
+WHERE operator_id IS NOT NULL
+GROUP BY 1, 2;
+
+SELECT add_continuous_aggregate_policy('operator_activity_15m',
+   start_offset => INTERVAL '1 day',
+   end_offset => INTERVAL '15 minutes',  
+   schedule_interval => INTERVAL '15 minutes'
+);
