@@ -49,11 +49,11 @@ LICENSE file.
       <artifactId>clickhouse-binding</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
+    <!-- <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>jdbc-binding</artifactId>
       <version>${project.version}</version>
-    </dependency>
+    </dependency> -->
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>tigerdata-binding</artifactId>

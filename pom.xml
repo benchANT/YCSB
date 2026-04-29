@@ -124,7 +124,7 @@ LICENSE file.
     <!-- workloads lex sorted -->
     <module>workload-iot</module>
     <!-- all the datastore bindings, lex sorted please -->
-    <module>jdbc</module>
+    <!-- <module>jdbc</module>-->
     <module>tigerdata</module>
     <module>clickhouse</module>
   </modules>
