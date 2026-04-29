@@ -17,6 +17,11 @@
 
 package site.ycsb;
 
+import java.io.BufferedReader;
+import java.io.IOError;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
@@ -228,5 +233,27 @@ public final class Utils {
       array[i] = temp;
     }
     return array;
+  }
+
+  public static String readByteStreamToString(InputStream s) {
+    if(s == null) {
+      // System.err.println("resource " + key + " was not found");
+      return null;
+    }
+    try {
+      BufferedReader br = new BufferedReader(new InputStreamReader(s));
+      StringBuilder b = new StringBuilder();
+      while(true) {
+        String line = br.readLine();
+        if(line == null) {
+          break;
+        }
+        b.append(line).append("\n");
+      }
+      return b.toString();
+    } catch(IOException ex) {
+      System.err.println("Exception occurred while reading from stream. Giving up.");
+      return null;
+    }
   }
 }
