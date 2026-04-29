@@ -112,6 +112,7 @@ LICENSE file.
     <openjpa.jdbc.version>2.1.1</openjpa.jdbc.version>
     <!-- datastore binding versions, lex sorted -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <clickhouse.version>0.7.1-patch1</clickhouse.version>
   </properties>
 
   <modules>
@@ -125,7 +126,7 @@ LICENSE file.
     <!-- all the datastore bindings, lex sorted please -->
     <module>jdbc</module>
     <module>tigerdata</module>
-    <!-- <module>clickhouse</module> -->
+    <module>clickhouse</module>
   </modules>
 
   <build>

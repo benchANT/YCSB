@@ -44,11 +44,11 @@ LICENSE file.
       <artifactId>coredb-binding</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <!-- <dependency>
+    <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>clickhouse-binding</artifactId>
       <version>${project.version}</version>
-    </dependency> -->
+    </dependency>
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>jdbc-binding</artifactId>
