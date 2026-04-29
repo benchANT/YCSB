@@ -137,6 +137,7 @@ public class TigerDataClient extends RtIotDb {
         super();
     }
 
+    @Override
     public Status insertOperatorData(List<RtIotOperatorData> operatorData) {
         System.err.println("Inserting batch for operators with " + operatorData.size() + " entries.");
         System.err.println("\t" + operatorData);
@@ -157,6 +158,7 @@ public class TigerDataClient extends RtIotDb {
         return Status.OK;
     }
 
+    @Override
     public Status insertSiteData(List<RtIotSitesData> siteData){
         System.err.println("Inserting batch for sites with " + siteData.size() + " entries.");
         System.err.println("\t" + siteData);
@@ -177,6 +179,7 @@ public class TigerDataClient extends RtIotDb {
         return Status.OK;
     }
     
+    @Override
     public Status insertMachineData(List<RtIotMachineData> machineData){
         System.err.println("Inserting batch for machines with " + machineData.size() + " entries.");
         System.err.println("\t" + machineData);
@@ -197,6 +200,7 @@ public class TigerDataClient extends RtIotDb {
         return Status.OK;
     }
 
+    @Override
     public Status insertSensorData(List<RtIotSensorData> sensorData) {
         System.err.println("Inserting batch for sender with " + sensorData.size() + " entries.");
         // System.err.println("\t" + sensorData);
