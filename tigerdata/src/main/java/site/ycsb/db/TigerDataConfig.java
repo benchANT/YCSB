@@ -32,6 +32,8 @@ public final class TigerDataConfig {
 
   public static final String JDBC_BATCH_UPDATES = "jdbc.batchupdateapi";
 
+  public static final String JDBC_CREATE_SCHEMA = "jdbc.createschema";
+
   /** The name of the property for the number of fields in a record. */
   public static final String FIELD_COUNT_PROPERTY = "fieldcount";
 
@@ -53,6 +55,7 @@ public final class TigerDataConfig {
   int batchSize;
   int jdbcFetchSize;
   boolean batchUpdates;
+  boolean createSchema;
   boolean autoCommit;
   static final String DEFAULT_PROP = "";
   boolean doDebug = false;
@@ -74,6 +77,7 @@ public final class TigerDataConfig {
     this.batchSize = PropertyParser.parseIntProperty(props, DB_BATCH_SIZE, -1);
 
     this.autoCommit = PropertyParser.parseBooleanProperty(props, JDBC_AUTO_COMMIT, true);
+    this.createSchema = PropertyParser.parseBooleanProperty(props, JDBC_CREATE_SCHEMA, false);
     this.batchUpdates = PropertyParser.parseBooleanProperty(props, JDBC_BATCH_UPDATES, false);
 
     try {

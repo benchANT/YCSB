@@ -1,32 +1,34 @@
+
+-- Track the operators assigned to the machines
+CREATE TABLE operators (
+ operator_id BIGINT PRIMARY KEY,
+ first_name VARCHAR(100) NOT NULL,
+ last_name VARCHAR(100) NOT NULL
+);
+
 -- Track the physical machines
 CREATE TABLE machines (
  vin TEXT PRIMARY KEY,
  make TEXT, -- e.g., Caterpillar, Komatsu, Volvo
  model TEXT,
  weight_class_tons FLOAT,
- purchase_date DATE,
- current_status TEXT DEFAULT 'Available' -- Available, In Use, Maintenance, Decommissioned
+ purchase_date BIGINT,
+ current_status TEXT
 );
 
--- Track the operators assigned to the machines
-CREATE TABLE operators (
- operator_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- first_name VARCHAR(100) NOT NULL,
- last_name VARCHAR(100) NOT NULL
-);
 
 CREATE TABLE sites (
- site_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ site_id INT PRIMARY KEY,
  address TEXT NOT NULL,
  is_active BOOLEAN DEFAULT TRUE,
- construction_begin TIMESTAMPTZ NOT NULL,
- construction_end TIMESTAMPTZ NOT NULL
+ construction_begin BIGINT NOT NULL,
+ construction_end BIGINT NOT NULL
 );
 
 CREATE TABLE telematics_data (
-  recorded_at TIMESTAMPTZ NOT NULL,
+  recorded_at TIMESTAMP NOT NULL,
   vin TEXT REFERENCES machines(vin),
-  operator_id UUID REFERENCES operators(operator_id),
+  operator_id BIGINT REFERENCES operators(operator_id),
   site_id INT REFERENCES sites(site_id),
   latitude FLOAT,
   longitude FLOAT,
@@ -54,12 +56,10 @@ SELECT
 FROM telematics_data
 GROUP BY usage_date, vin;
 
-
 SELECT add_continuous_aggregate_policy('daily_machine_usage',
     start_offset => INTERVAL '3 days', 
     end_offset => INTERVAL '1 hour',   
     schedule_interval => INTERVAL '1 hour');
-
 
 CREATE MATERIALIZED VIEW fleet_metrics_15m
 WITH (timescaledb.continuous) AS
@@ -87,7 +87,6 @@ SELECT add_continuous_aggregate_policy('fleet_metrics_15m',
    end_offset => INTERVAL '15 minutes',  
    schedule_interval => INTERVAL '15 minutes'
 );
-
 
 CREATE MATERIALIZED VIEW operator_activity_15m
 WITH (timescaledb.continuous) AS

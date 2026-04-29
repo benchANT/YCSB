@@ -86,6 +86,9 @@ public class TigerDataClient extends RtIotDb {
     
     try {
         config.init(getProperties());
+        if(config.createSchema == true) {
+          InitHelper.createSchema(config.connection);
+        }
         initInsertPreparedStatements();
     }
     /*
