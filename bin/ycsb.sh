@@ -234,9 +234,9 @@ else
 fi
 
 ## FIXME: this is a ugly hack for progressing faster. This needs to be fixed
-# workload-iot folder.
-if [ "${BINDING_DIR}" = "tigerdata" ] ; then
-  echo "[WARN] The 'tigerdata' client needs additional libraries. Adding by hand ..."
+# add workload-iot folder to classpath. We assume all bindings require this.
+#if [ "${BINDING_DIR}" = "tigerdata" ] ; then
+  echo "[WARN] Adding workload-iot libraries by hand ..."
   for f in "$YCSB_HOME"/workload-iot/target/*.jar ; do
     if [ -r "$f" ] ; then
       CLASSPATH="$CLASSPATH:$f"
@@ -246,7 +246,7 @@ if [ "${BINDING_DIR}" = "tigerdata" ] ; then
 #  if [ -r "$f" ] ; then
 #    CLASSPATH="$CLASSPATH:$f"
 #  fi
-fi
+# fi
 
 
 # Couchbase deprecation message

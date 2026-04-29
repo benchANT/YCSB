@@ -56,7 +56,8 @@ COMMANDS = {
 DATABASES = {
     "basic"        : "site.ycsb.BasicDB",
     "jdbc"         : "site.ycsb.db.JdbcDBClient",
-    "tigerdata"    : "site.ycsb.db.TigerDataClient"
+    "tigerdata"    : "site.ycsb.db.TigerDataClient",
+    "clickhouse"    : "site.ycsb.db.ClickhouseClient"
 }
 
 OPTIONS = {
