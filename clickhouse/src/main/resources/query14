@@ -1,0 +1,37 @@
+WITH valid_operator_pings AS ( 
+  SELECT 
+   vin, 
+   recorded_at, 
+   operator_id, 
+   LAG(operator_id) OVER (PARTITION BY vin ORDER BY recorded_at) AS prev_operator_id 
+ FROM telematics_data 
+ WHERE recorded_at >= INTERVAL_PLACEHOLDER 
+   AND operator_id IS NOT NULL 
+), 
+daily_switches AS ( 
+  SELECT 
+   vin,  
+   toStartOfInterval(recorded_at, INTERVAL 1 DAY) AS usage_date, 
+   SUM(CASE 
+         WHEN prev_operator_id IS NOT NULL AND operator_id != prev_operator_id THEN 1 
+         ELSE 0 
+       END) AS daily_switch_count 
+ FROM valid_operator_pings 
+ GROUP BY vin, usage_date 
+) 
+SELECT  
+ s.vin,  
+ m.make,  
+ m.model, 
+ ROUND(AVG(s.daily_switch_count)::numeric, 2) AS avg_switches_per_day,  
+ MAX(s.daily_switch_count) AS max_switches_in_one_day  
+FROM daily_switches s  
+JOIN machines m ON s.vin = m.vin  
+WHERE s.daily_switch_count > 0  
+GROUP BY s.vin, m.make, m.model  
+ORDER BY avg_switches_per_day DESC  
+
+-- 1. Look at the sequence of actual operators on each machine, ignoring empty/parked pings
+-- 3. Calculate the averages and find the extreme cases
+-- 2. Count a "switch" every time the operator changes from the previous valid ping
+-- Optional: Only look at machines that were actually shared at least once

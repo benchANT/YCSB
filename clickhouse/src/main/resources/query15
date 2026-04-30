@@ -1,0 +1,36 @@
+WITH daily_machine_presence AS (
+ SELECT 
+   toStartOfInterval(recorded_at, INTERVAL 1 DAY) AS usage_date, 
+   site_id, 
+   vin, 
+   MAX(CASE WHEN engine_state IN ('Working', 'Idle') THEN 1 ELSE 0 END) AS was_active
+ FROM telematics_data 
+ WHERE recorded_at >= INTERVAL_PLACEHOLDER 
+   AND site_id IS NOT NULL 
+ GROUP BY usage_date, site_id, vin 
+), 
+daily_site_totals AS ( 
+ SELECT 
+   usage_date, 
+   site_id, 
+   COUNT(vin) AS total_machines_present, 
+   SUM(was_active) AS active_machines 
+ FROM daily_machine_presence 
+ GROUP BY usage_date, site_id 
+) 
+SELECT 
+ d.usage_date, 
+ s.address AS site_address, 
+ d.active_machines, 
+ d.total_machines_present, 
+ ROUND((d.active_machines::numeric / d.total_machines_present) * 100, 2) AS utilization_percentage 
+FROM daily_site_totals d 
+JOIN sites s ON d.site_id = s.site_id 
+ORDER BY d.usage_date DESC, utilization_percentage ASC
+
+ -- 1. Determine which machines were at which site each day,
+ -- and whether they were turned on at least once.
+ -- Flag with a 1 if it was ever Working or Idle that day at that site
+ -- 2. Count the total machines and active machines per site, per day
+ -- 3. Calculate the percentage and bring in the site address
+   -- Calculate Utilization %: (Active / Total) * 100

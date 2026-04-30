@@ -1,0 +1,10 @@
+SELECT 
+    usage_date,
+    vin,
+    working_seconds + idle_seconds AS total_operating_time  
+FROM daily_machine_usage  
+WHERE vin = {machineId: String} 
+  AND usage_date >= INTERVAL_PLACEHOLDER 
+ORDER BY usage_date DESC 
+
+-- Extract the specific durations from our pre-calculated summary

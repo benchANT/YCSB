@@ -1,26 +1,40 @@
 package site.ycsb.db;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import com.benchant.realtimeiot.QueryRegistry;
 import com.benchant.realtimeiot.RtIotDb;
 import com.benchant.realtimeiot.data.RtIotMachineData;
 import com.benchant.realtimeiot.data.RtIotOperatorData;
 import com.benchant.realtimeiot.data.RtIotSensorData;
 import com.benchant.realtimeiot.data.RtIotSitesData;
 import com.clickhouse.client.api.Client;
+import com.clickhouse.client.api.data_formats.ClickHouseBinaryFormatReader;
+import com.clickhouse.client.api.data_formats.RowBinaryWithNamesAndTypesFormatReader;
 import com.clickhouse.client.api.data_formats.internal.BinaryStreamReader.ByteBufferAllocator;
 import com.clickhouse.client.api.data_formats.internal.BinaryStreamReader.CachingByteBufferAllocator;
 import com.clickhouse.client.api.insert.InsertResponse;
 import com.clickhouse.client.api.metadata.TableSchema;
+import com.clickhouse.client.api.query.QueryResponse;
 import com.clickhouse.client.api.query.QuerySettings;
+import com.clickhouse.data.ClickHouseColumn;
+import com.clickhouse.data.ClickHouseDataType;
 
+import site.ycsb.ByteIterator;
+import site.ycsb.NumericByteIterator;
 import site.ycsb.Status;
+import site.ycsb.StringByteIterator;
 import site.ycsb.db.InsertHelper.MachineHelper;
 import site.ycsb.db.InsertHelper.OperatorHelper;
 import site.ycsb.db.InsertHelper.SiteHelper;
@@ -100,6 +114,7 @@ public final class ClickhouseClient extends RtIotDb {
                 .setExecutionTimeout(queryTimeoutSeconds, ChronoUnit.SECONDS)
                 .setSocketTimeout((queryTimeoutSeconds + 2) * 1000)
                 .build();
+            
             registerSchemaMapper(OPERATOR_TABLE_NAME, OperatorHelper.class);
             registerSchemaMapper(SITE_TABLE_NAME, SiteHelper.class);
             registerSchemaMapper(MACHINE_TABLE_NAME, MachineHelper.class);
@@ -159,138 +174,35 @@ public final class ClickhouseClient extends RtIotDb {
 
     @Override
     public Status query(String queryId, java.util.Map<String, Object> params, List<java.util.HashMap<String, site.ycsb.ByteIterator>> result) {
-        return Status.NOT_IMPLEMENTED;
-    }
-
-
-    /*
-
-    private Map<String, List<ChWrapper>> batches = new HashMap<>();
-    public Status addRow(String table, Map<String, Object> params) {
-        try {
-            batchCounter++;
-            ChWrapper wrapper = InsertFiller.fillInsert(table, params);
-            if(batchsize == 1) {
-                CompletableFuture<InsertResponse> f = client.insert(table, Collections.singletonList(wrapper));
-                InsertResponse resp = f.get();
-                // System.err.println("added row: " + resp.getWrittenRows() + ", " + resp.toString());
-                return Status.OK;
-            } else {
-                List<ChWrapper> list = batches.get(table);
-                if(list == null) {
-                    list = new ArrayList<>(batchsize);
-                    batches.put(table, list);
-                }
-                list.add(wrapper);
-            }
-            if(batchCounter >= batchsize) {
-                List<ChWrapper> toSend = batches.get(table);
-                batches.put(table, new ArrayList<>(batchsize));
-                CompletableFuture<InsertResponse> f = client.insert(table, toSend);
-                InsertResponse resp = f.get();
-                batchCounter = 0;
-                return Status.OK;
-            } else {
-                return Status.BATCHED_OK;
-            }
-        } catch(Exception ex) {
-            ex.printStackTrace(System.err);
-            return Status.ERROR;
-        }
-    }
-
-    public final Status query(String table, String query, Map<String, Object> params, List<HashMap<String, ByteIterator>> result) {
-        // Default format is RowBinaryWithNamesAndTypesFormatReader so reader
-        String rawQuery = QueryRegistry.INSTANCE.getQuery(query);
+        String rawQuery = QueryRegistry.INSTANCE.getQuery(queryId);
         if(rawQuery == null) {
-            System.err.println("query " + query + " not found");
+            System.err.println("query '" + queryId + "'' not found");
             return Status.UNEXPECTED_STATE;
         }
-
-        if("query10".equals(query)) {
-            return Status.FORBIDDEN;
-        /*    final Long year = (Long) params.get(TpcDsParameterGenerator.YEAR);
-            if(doDebug) {
-                System.err.println("replacing ("+ TpcDsParameterGenerator.YEAR + "/" + year + ") with quarters");
-            }
-            params.put("YEARQ1", year + "Q1");
-            params.put("YEARQ2", year + "Q2");
-            params.put("YEARQ3", year + "Q3");
-            params.put("YEARQ4", year + "Q4");
-        * /
-        }
-
+        String[] patched = QueryFiller.patchQueryString(queryId, rawQuery, params);
+        String nextQuery = patched[1];
         if(doDebug) {
-            System.err.println("\nrunning query '" + query + "' with parameters " + params);
+            System.err.println("\nrunning query '" + queryId + "' with parameters " + params);
+            System.err.println("\n\t '" + nextQuery);
         }
         QueryResponse response = null;
         ClickHouseBinaryFormatReader reader = null;
+        // we cannot use auto-close as close throws an exception
         try {
-            // we cannot use auto-close as close throws an exception
-            response = client.query(rawQuery, params, querySettings).get(queryTimeoutSeconds, TimeUnit.SECONDS);
+            response = client.query(nextQuery, params, querySettings).get(queryTimeoutSeconds, TimeUnit.SECONDS);
             if(response.getResultRows() == 0) {
-                debug("\n\tresults\n\t\tnot found", query, "(", rawQuery, ")");
+                debug("\n\tresults\n\t\tnot found", queryId, "(", rawQuery, ")");
                 return Status.NOT_FOUND;
             }
             // Create a reader to access the data in a convenient way
             reader = new RowBinaryWithNamesAndTypesFormatReader(response.getInputStream(), response.getSettings(), myAllocator);
-            TableSchema schema = reader.getSchema();
-            Map<String,ClickHouseDataType> columns = new HashMap<>();
-            for(ClickHouseColumn c : schema.getColumns()) {
-                columns.put(c.getColumnName(), c.getDataType());
-            }
-            
-            while (reader.hasNext()) {
-                Map<String, Object> line = reader.next(); // Read the next record from stream and parse it
-                HashMap<String,ByteIterator> bit = new HashMap<String,ByteIterator>();
-                for(String s : line.keySet()) {
-                    ClickHouseDataType type = columns.get(s);
-                    switch (type) {
-                        case Int64:
-                            long ll = reader.getLong(s);
-                            bit.put(s, new NumericByteIterator(ll));
-                            break;
-                        case UInt64:
-                            long l = reader.getBigInteger(s).longValue();
-                            bit.put(s, new NumericByteIterator(l));
-                            break;
-                        case DateTime32:
-                            Instant i2 = reader.getInstant(s);
-                            bit.put(s, new StringByteIterator(i2.toString()));
-                            break;
-                        case DateTime:
-                        case DateTime64:
-                           LocalDateTime i3 = reader.getLocalDateTime(s);
-                           bit.put(s, new StringByteIterator(i3.toString()));
-                           break;
-                        case Float64:
-                            double d = reader.getDouble(s);
-                            bit.put(s, new NumericByteIterator(d));
-                            break;
-                        case String:
-                            String ss = reader.getString(s);
-                            bit.put(s, new StringByteIterator(ss));
-                            break;
-                        case Decimal:
-                            String dec = reader.getString(s);
-                            bit.put(s, new StringByteIterator(dec));
-                            break;
-                        default:
-                            throw new UnsupportedOperationException("no support for data type " +  type + " available");
-                    }
-                    // double id = reader.getDouble("id");
-                    // String title = reader.getString("title");
-                    // String url = reader.getString("url");
-                }
-                result.add(bit);
-            }
-            debug("\tresults");
-            result.forEach(row -> debug("\t\t data: " + row.toString()));
+            parseResults(reader, result);
         } catch(InterruptedException | TimeoutException | ExecutionException ex) {
             debug("Exception occurred: " + ex.getMessage() + " (" + ex.getClass() + ")" );
             return Status.ERROR;
         } catch(com.clickhouse.client.api.ServerException ex){
             debug("Exception occurred: " + ex.getMessage() + " (" + ex.getClass() + ")" );
+            ex.printStackTrace();
             return Status.ERROR;
         } catch(com.clickhouse.client.api.ClientException ex) {
             debug("Exception occurred: " + ex.getMessage() + " (" + ex.getClass() + ")" );
@@ -313,6 +225,82 @@ public final class ClickhouseClient extends RtIotDb {
             }
         }
         return Status.OK;
+    }
+
+    private void parseResults(ClickHouseBinaryFormatReader reader, List<java.util.HashMap<String, site.ycsb.ByteIterator>> result) {
+        TableSchema schema = reader.getSchema();
+        Map<String,ClickHouseDataType> columns = new HashMap<>();
+        for(ClickHouseColumn c : schema.getColumns()) {
+            columns.put(c.getColumnName(), c.getDataType());
+        }
+        while (reader.hasNext()) {
+            Map<String, Object> line = reader.next(); // Read the next record from stream and parse it
+            HashMap<String,ByteIterator> bit = new HashMap<String,ByteIterator>();
+            for(String s : line.keySet()) {
+                ClickHouseDataType type = columns.get(s);
+                switch (type) {
+                    case Int64:
+                        long ll = reader.getLong(s);
+                        bit.put(s, new NumericByteIterator(ll));
+                        break;
+                    case Int32:
+                        int i = reader.getInteger(s);
+                        bit.put(s, new NumericByteIterator(i));
+                        break;
+                    case UInt64:
+                        long l = reader.getBigInteger(s).longValue();
+                        bit.put(s, new NumericByteIterator(l));
+                        break;
+                    case Date:
+                    case Date32:
+                        // Instant i4 = reader.getInstant(s);
+                        ZonedDateTime zdt = reader.getZonedDateTime(s);
+                        bit.put(s, new StringByteIterator(zdt.toString()));
+                        break;
+                    case DateTime32:
+                        Instant i2 = reader.getInstant(s);
+                        bit.put(s, new StringByteIterator(i2.toString()));
+                        break;
+                    case DateTime:
+                    case DateTime64:
+                        LocalDateTime i3 = reader.getLocalDateTime(s);
+                        bit.put(s, new StringByteIterator(i3.toString()));
+                        break;
+                    case Float32:
+                        float f = reader.getFloat(s);
+                        bit.put(s, new NumericByteIterator(f));
+                        break;
+                    case Float64:
+                        double d = reader.getDouble(s);
+                        bit.put(s, new NumericByteIterator(d));
+                        break;
+                    case String:
+                        String ss = reader.getString(s);
+                        bit.put(s, new StringByteIterator(ss));
+                        break;
+                    case Decimal:
+                        String dec = reader.getString(s);
+                        bit.put(s, new StringByteIterator(dec));
+                        break;
+                    default:
+                        throw new UnsupportedOperationException("no support for data type " +  type + " available");
+                }
+            }
+            result.add(bit);
+        }
+        debug("\tresults");
+        result.forEach(row -> debug("\t\t data: " + row.toString()));
+    }
+
+    /*
+    public final Status query(String table, String query, Map<String, Object> params, List<HashMap<String, ByteIterator>> result) {
+        
+        
+        try {
+
+            
+
+        
     }
  */
 }

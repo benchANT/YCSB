@@ -1,0 +1,18 @@
+WITH durations AS ( 
+ SELECT 
+  vin, 
+  SUM(idle_seconds) AS idle_seconds, 
+  SUM(working_seconds) AS working_seconds
+  FROM daily_machine_usage 
+ WHERE usage_date >= INTERVAL_PLACEHOLDER 
+ GROUP BY vin 
+) 
+SELECT 
+ vin, 
+ ROUND(((idle_seconds + working_seconds) / 3600.0)::numeric, 2) AS total_engine_hours, 
+ ROUND( 
+   (idle_seconds / NULLIF(idle_seconds + working_seconds, 0) * 100)::numeric, 
+ 2) AS idle_percentage 
+FROM durations 
+WHERE (idle_seconds + working_seconds) > 0 
+ORDER BY idle_percentage DESC 

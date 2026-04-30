@@ -1,0 +1,70 @@
+WITH dominant_states AS (
+  SELECT
+   toStartOfInterval(time_bucket_15m, INTERVAL 1 HOUR) as hourly_bucket,
+   vin,
+   CASE
+     WHEN working_seconds >= idle_seconds
+         AND working_seconds >= off_seconds
+        THEN 'Working'
+     WHEN idle_seconds >= off_seconds
+        THEN 'Idle'
+     ELSE 'Off'
+   END AS primary_state,
+   CASE
+     WHEN working_seconds >= idle_seconds
+        AND working_seconds >= off_seconds
+        THEN working_seconds
+     WHEN idle_seconds >= off_seconds
+     THEN idle_seconds
+     ELSE off_seconds
+   END AS primary_state_seconds
+ FROM fleet_metrics_15m
+ WHERE hourly_bucket >= INTERVAL_PLACEHOLDER 
+), 
+state_changes AS ( 
+ SELECT
+   vin,
+   hourly_bucket,
+   primary_state,
+   primary_state_seconds,
+   CASE
+     WHEN LAG(primary_state) OVER (PARTITION BY vin ORDER BY hourly_bucket) = primary_state
+     THEN 0
+     ELSE 1
+   END AS is_new_session 
+ FROM dominant_states 
+),  
+session_identifiers AS ( 
+ SELECT
+   vin,
+   primary_state,
+   primary_state_seconds,
+   SUM(is_new_session) OVER (PARTITION BY vin ORDER BY hourly_bucket) AS session_id
+ FROM state_changes  
+),  
+session_totals AS ( 
+ SELECT 
+   vin,
+   primary_state AS engine_state,
+   session_id,
+   SUM(primary_state_seconds) AS session_duration_seconds
+ FROM session_identifiers
+ GROUP BY vin, primary_state, session_id 
+)  
+SELECT 
+ engine_state,
+ COUNT(session_id) AS total_sessions_recorded,
+ ROUND((AVG(session_duration_seconds) / 60.0)::numeric, 2) AS avg_duration_minutes,
+ ROUND((MAX(session_duration_seconds) / 3600.0)::numeric, 2) AS max_duration_hours  
+FROM session_totals  
+GROUP BY engine_state  
+ORDER BY avg_duration_minutes DESC  
+
+-- 1. Determine the primary state for each 15-minute bucket
+      -- (Your 15m time_bucket column)
+     -- Compare the raw intervals directly to find the winner
+     -- Extract the exact seconds spent in that winning state
+-- 2. Detect when the primary state changes from one bucket to the next
+-- 3. Create a unique ID for every continuous block of identical states
+-- 4. Sum the exact seconds belonging to that state within the session
+-- 5. Calculate the final averages across all recorded sessions

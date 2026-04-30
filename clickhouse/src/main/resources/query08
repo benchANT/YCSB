@@ -1,0 +1,48 @@
+WITH 
+  INTERVAL_PLACEHOLDER_LOWER  AS lower_bound,
+  INTERVAL_PLACEHOLDER_UPPER  AS upper_bound,
+  dateDiff('day', lower_bound, upper_bound) AS difference_days,
+  86400 AS day_in_seconds,
+
+  date_series AS (
+      SELECT
+          toDate(lower_bound + number * day_in_seconds) AS usage_date,
+          toUnixTimestamp(usage_date + 1) - 1 as purchaseEpochTime
+      FROM numbers(difference_days + 1)
+  )
+, fleet_size AS ( 
+ SELECT 
+   ds.usage_date, 
+   COUNT(m.vin) AS total_machines 
+ FROM date_series ds 
+ CROSS JOIN machines m
+  WHERE m.purchase_date <= ds.purchaseEpochTime
+   AND m.current_status != 'Decommissioned' 
+ GROUP BY ds.usage_date 
+)
+, active_machines AS ( 
+ SELECT 
+   usage_date::date AS usage_date_date, 
+   COUNT(vin) AS active_count 
+ FROM daily_machine_usage 
+ WHERE usage_date >= INTERVAL_PLACEHOLDER_LOWER 
+   AND working_seconds + idle_seconds > 0 
+ GROUP BY usage_date_date 
+) 
+SELECT 
+ f.usage_date as usage_date, 
+ COALESCE(a.active_count, 0) AS deployed_and_running, 
+ f.total_machines AS total_available_fleet, 
+ CASE 
+   WHEN f.total_machines = 0 THEN 100.00::Float64
+   ELSE ROUND((COALESCE(a.active_count, 0)::Float64 / f.total_machines::Float64) * 100, 2)::Float64 
+ END AS utilization_percentage 
+FROM fleet_size f 
+LEFT JOIN active_machines a ON f.usage_date = a.usage_date_date 
+ORDER BY usage_date DESC 
+
+          -- last second of the day
+-- 1. Generate a continuous calendar for the last 30 days (prevents missing days like Sundays)
+ -- 2. Figure out the total eligible fleet size for each day
+  -- 3. Count how many machines actually ran (Idle or Working) on each day
+  -- 4. Bring it all together to calculate the percentage

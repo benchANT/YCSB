@@ -1,0 +1,31 @@
+WITH durations AS ( 
+ SELECT 
+   vin, 
+   SUM(idle_seconds) AS idle_seconds, 
+   SUM(working_seconds) AS working_seconds
+ FROM daily_machine_usage 
+ WHERE usage_date >= INTERVAL_PLACEHOLDER 
+ GROUP BY vin 
+) 
+SELECT 
+ d.vin,
+ m.make,
+ m.model,
+ ROUND((d.idle_seconds / 3600.0)::numeric, 2) AS total_idle_hours,
+ ROUND((d.working_seconds / 3600.0)::numeric, 2) AS total_working_hours,
+ CASE
+   WHEN d.working_seconds = 0 AND d.idle_seconds > 0 THEN 999.99::numeric
+   ELSE ROUND((d.idle_seconds / NULLIF(d.working_seconds, 0))::numeric, 2)
+ END AS idle_to_working_ratio 
+FROM durations d 
+JOIN machines m ON d.vin = m.vin 
+WHERE (d.idle_seconds + d.working_seconds) > 0 
+ORDER BY idle_to_working_ratio DESC 
+
+-- 1. Merge the 30 daily buckets into a single monthly state summary
+-- 2. Extract the raw seconds for Idle and Working states
+-- 3. Calculate the ratio and join machine details
+-- If it idled but never worked, flag it with an artificially high number for sorting
+   -- Otherwise, standard ratio math: Idle / Working
+-- Calculate the Idle-to-Working Ratio
+-- Filter out machines that just sat completely off all month

@@ -1,0 +1,31 @@
+WITH threshold_breaches AS ( 
+ SELECT
+   vin,
+   SUM(CASE
+         WHEN recorded_at >= INTERVAL_PLACEHOLDER_INNER THEN 1
+         ELSE 0
+       END) AS breaches_last_24h,
+   COUNT(recorded_at) AS breaches_last_7d
+ FROM telematics_data
+ WHERE recorded_at >= INTERVAL_PLACEHOLDER 
+   AND (
+     coolant_temperature > 70 OR
+     hydraulic_oil_temperature > 70 OR
+     engine_rpm > 2000
+   )
+ GROUP BY vin 
+) 
+SELECT 
+ b.vin, 
+ m.make, 
+ m.model, 
+ b.breaches_last_24h, 
+ b.breaches_last_7d 
+FROM threshold_breaches b 
+JOIN machines m ON b.vin = m.vin 
+ORDER BY b.breaches_last_7d DESC, b.breaches_last_24h DESC 
+
+  -- Limit the entire scan to the last 7 days
+  -- Count how many times thresholds were broken in the last 7 days
+  -- Count how many times thresholds were broken in the last 24 hours
+  -- The Breach Conditions
