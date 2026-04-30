@@ -241,11 +241,13 @@ def main():
 
     if is_distribution():
         db_dir = os.path.join(ycsb_home, binding + "-binding")
+        workload_dir = os.path.join(ycsb_home, "workload-iot")
         # include top-level conf for when we're a binding-specific artifact.
         # If we add top-level conf to the general artifact, starting here
         # will allow binding-specific conf to override (because it's prepended)
         cp = [os.path.join(ycsb_home, "conf")]
         cp.extend(find_jars(os.path.join(ycsb_home, "lib")))
+        cp.extend(find_jars(os.path.join(workload_dir, "lib")))
         cp.extend(find_jars(os.path.join(db_dir, "lib")))
     else:
         warn("Running against a source checkout. In order to get our runtime "
