@@ -9,17 +9,17 @@ import site.ycsb.util.PropertyParser;
 public final class RtIotConfiguration {
 
     // Property names
-    public static final String PROP_START_TIME = "riot.start_time";
-    public static final String PROP_STOP_TIME = "riot.stop_time";
-    public static final String PROP_MACHINES = "riot.machines";
-    public static final String PROP_SENDERS = "riot.senders";
-    public static final String PROP_SITES = "riot.sites";
-    public static final String PROP_OPERATORS = "riot.operators";
-    public static final String PROP_MACHINE_FREQUENCY = "riot.machine_frequency";
-    public static final String PROP_SENDER_FREQUENCY = "riot.sender_frequency";
-    public static final String SKIP_OPERATORS = "riot.skip_operators";
-    public static final String SKIP_SITES = "riot.skip_sites";
-    public static final String SKIP_MACHINES = "riot.skip_machines";
+    public static final String PROP_START_TIME = "rtiot.start_time";
+    public static final String PROP_STOP_TIME = "rtiot.stop_time";
+    public static final String PROP_MACHINES = "rtiot.machines";
+    public static final String PROP_SENDERS = "rtiot.senders";
+    public static final String PROP_SITES = "rtiot.sites";
+    public static final String PROP_OPERATORS = "rtiot.operators";
+    public static final String PROP_MACHINE_FREQUENCY = "rtiot.machine_frequency";
+    public static final String PROP_SENDER_FREQUENCY = "rtiot.sender_frequency";
+    public static final String SKIP_OPERATORS = "rtiot.skip_operators";
+    public static final String SKIP_SITES = "rtiot.skip_sites";
+    public static final String SKIP_MACHINES = "rtiot.skip_machines";
 
     // Property defaults
     public static final String DEFAULT_START_TIME = "2026-01-01T00:00:00Z";
