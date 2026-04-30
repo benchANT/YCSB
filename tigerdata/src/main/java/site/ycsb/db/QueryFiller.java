@@ -52,12 +52,16 @@ public final class QueryFiller {
                 break;
             case "query18":
                 rawQuery = patchQuery18(rawQuery, params);
+                break;
             case "query21":
                 rawQuery = patchQuery21(rawQuery, params);
+                break;
             case "query25":
                 rawQuery = patchQuery25(rawQuery, params);
+                break;
             case "query28":
                 rawQuery = patchQuery28(rawQuery, params);
+                break;
             default:
                 // otherwise now we just return an empty map
                 break;
