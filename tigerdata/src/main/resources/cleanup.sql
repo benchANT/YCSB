@@ -9,10 +9,3 @@ DROP TABLE telematics_data ;
 DROP TABLE sites ;
 DROP TABLE machines ;
 DROP TABLE operators ;
-
-
-
-
-
-
-
