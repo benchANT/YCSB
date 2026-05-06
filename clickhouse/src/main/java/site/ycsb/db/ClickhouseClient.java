@@ -252,10 +252,13 @@ public final class ClickhouseClient extends RtIotDb {
                         long ll = reader.getLong(s);
                         bit.put(s, new NumericByteIterator(ll));
                         break;
+                    case UInt16:
+                    case Int16:
                     case Int32:
                         int i = reader.getInteger(s);
                         bit.put(s, new NumericByteIterator(i));
                         break;
+                    case UInt32:
                     case UInt64:
                         long l = reader.getBigInteger(s).longValue();
                         bit.put(s, new NumericByteIterator(l));
