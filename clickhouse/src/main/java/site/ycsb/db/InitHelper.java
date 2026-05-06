@@ -17,15 +17,39 @@ public final class InitHelper {
     public static String REFRESH_FILE_NAME = "refresh_views.sql";
 
     static void helpWithInit(Client client, Properties props, String databaseName) throws DBException {
+
         boolean createSchema = PropertyParser.parseBooleanProperty(props, ClickhouseClient.CLICKHOUSE_CREATE_SCHEMA, false);
         boolean refreshViews = PropertyParser.parseBooleanProperty(props, ClickhouseClient.CLICKHOUSE_REFRESH_VIEWS, false);
         if(createSchema == true) {
+            runOperationWithDefaultDatabase(client, "CREATE DATABASE IF NOT EXISTS " + databaseName + ";");
             InitHelper.createSchema(client);
         }
         if(refreshViews == true) {
             InitHelper.refreshViews(client);
             try { Thread.sleep(10000); }
             catch(InterruptedException ex){ Thread.currentThread().interrupt();}
+        }
+    }
+
+    static void runOperationWithDefaultDatabase(Client client, String query) throws DBException {
+        System.err.println("sending schema request: " + query);
+        try {
+            CommandSettings settings = new CommandSettings();
+            settings.setDatabase("default");
+            CompletableFuture<CommandResponse> future = client.execute(query, settings);
+            CommandResponse response = future.get();
+        } catch(Exception ex) {
+            throw new DBException(ex);
+        }
+    }
+
+    static void runOperation(Client client, String query) throws DBException {
+        System.err.println("sending schema request: " + query);
+        try {
+            CompletableFuture<CommandResponse> future = client.execute(query);
+            CommandResponse response = future.get();
+        } catch(Exception ex) {
+            throw new DBException(ex);
         }
     }
 
@@ -44,14 +68,7 @@ public final class InitHelper {
         System.err.println(String.join("\n>=====<\n", schemaDefinitions));
         System.err.println("=============================");
         for(String query: schemaDefinitions) {
-            System.err.println("sending schema request: " + query);
-            try {
-                CommandSettings settings = new CommandSettings();
-                CompletableFuture<CommandResponse> future = client.execute(query);
-                CommandResponse response = future.get();
-            } catch(Exception ex) {
-                throw new DBException(ex);
-            }
+            runOperation(client, query);
         }
         /*
         connection.setAutoCommit(true);
