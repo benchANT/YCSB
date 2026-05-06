@@ -32,6 +32,7 @@ import com.clickhouse.data.ClickHouseColumn;
 import com.clickhouse.data.ClickHouseDataType;
 
 import site.ycsb.ByteIterator;
+import site.ycsb.DBException;
 import site.ycsb.NumericByteIterator;
 import site.ycsb.Status;
 import site.ycsb.StringByteIterator;
@@ -39,8 +40,13 @@ import site.ycsb.db.InsertHelper.MachineHelper;
 import site.ycsb.db.InsertHelper.OperatorHelper;
 import site.ycsb.db.InsertHelper.SiteHelper;
 import site.ycsb.db.InsertHelper.TelematicsHelper;
+import site.ycsb.util.PropertyParser;
 
 public final class ClickhouseClient extends RtIotDb {
+
+    public static final String CLICKHOUSE_CREATE_SCHEMA = "clickhouse.createschema";
+    public static final String CLICKHOUSE_REFRESH_VIEWS = "clickhouse.refreshviews";
+
     private static final String CLICKHOUSE_QUERY_TIMEOUT = "clickhouse.timeout";
     private static final String CLICKHOUSE_QUERY_TIMEOUT_DEFAULT = "3";
     private static final String CLICKHOUSE_MAX_CONNECTIONS = "clickhouse.maxConnections";
@@ -67,6 +73,7 @@ public final class ClickhouseClient extends RtIotDb {
     private static int queryTimeoutSeconds;
     private static Client client;
     private static boolean doDebug = false;
+    private static boolean createSchema = false;
     private final ByteBufferAllocator myAllocator = new CachingByteBufferAllocator();
     private int batchCounter = 0;
 
@@ -83,7 +90,7 @@ public final class ClickhouseClient extends RtIotDb {
     }
 
     @Override
-    public void init() {
+    public void init() throws DBException {
         synchronized(ClickhouseClient.class) {
             if(client != null) {
                 return;
@@ -115,6 +122,8 @@ public final class ClickhouseClient extends RtIotDb {
                 .setSocketTimeout((queryTimeoutSeconds + 2) * 1000)
                 .build();
             
+            InitHelper.helpWithInit(client, props, database);
+
             registerSchemaMapper(OPERATOR_TABLE_NAME, OperatorHelper.class);
             registerSchemaMapper(SITE_TABLE_NAME, SiteHelper.class);
             registerSchemaMapper(MACHINE_TABLE_NAME, MachineHelper.class);

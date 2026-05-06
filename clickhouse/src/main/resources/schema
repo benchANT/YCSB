@@ -1,5 +1,5 @@
--- Track the operators assigned to the machines
-CREATE TABLE rtiot.operators (
+
+CREATE TABLE operators (
  operator_id BigInt,
  first_name VARCHAR(100) NOT NULL,
  last_name VARCHAR(100) NOT NULL,
@@ -32,22 +32,24 @@ CREATE TABLE telematics_data (
   longitude Float32,
   engine_state LowCardinality(TEXT), -- Off, Idle, Working
   fuel_level_percent Float32,
-  engine_rpm UINT16,
+  engine_rpm UInt16,
   coolant_temperature Float32,
   hydraulic_oil_temperature Float32
 ) 
 PARTITION BY toYYYYMMDD(recorded_at)
 ORDER BY vin;
 
--- MATERIALIZED VIEWS 
-
+--- disable all views for now
+--- SYSTEM STOP VIEWS ;
+---
+--- MATERIALIZED VIEWS 
+--- 
 -- Terminology is a bit different. 
 -- In TigerData, MATERIALIZED VIEW is actually something like a table that one can query against
 -- In Clickhouse, a MATERIALIZED VIEW is only a trigger that "copies" data from source table(s) to
 -- a destination table and does some data processing. So, we need a further table to keep the data
-
+--- 
 ----- 15 minute operator activity
-
 CREATE TABLE operator_activity_15m (
   time_bucket_15m DateTime(6),
   operator_id BigInt NOT NULL,
@@ -60,8 +62,9 @@ PRIMARY KEY operator_id
 ORDER BY (operator_id, time_bucket_15m)
 
 CREATE MATERIALIZED VIEW operator_activity_15m_mv 
-REFRESH EVERY 1 YEAR OFFSET 11 MONTH
-TO operator_activity_15m
+REFRESH
+EVERY 1 YEAR OFFSET 11 MONTH
+TO operator_activity_15m EMPTY 
 AS SELECT
  toStartOfInterval(recorded_at, INTERVAL 15 MINUTE) AS time_bucket_15m, 
  operator_id,
@@ -74,18 +77,15 @@ WHERE operator_id IS NOT NULL
 GROUP BY 1, 2;
 
 -----  stop it and force update
-SYSTEM STOP REPLICATED VIEW operator_activity_15m_mv ;
-SYSTEM REFRESH VIEW operator_activity_15m_mv ;
-
+-- SYSTEM STOP REPLICATED VIEW operator_activity_15m_mv ;
 -----  NOT needed for first part of the project
 -- SELECT add_continuous_aggregate_policy('operator_activity_15m',
 --    start_offset => INTERVAL '1 day',
 --    end_offset => INTERVAL '15 minutes',  
 --    schedule_interval => INTERVAL '15 minutes'
 -- );
-
+--- 
 ----- fleet metrics in 15 minute intervals
-
 CREATE TABLE fleet_metrics_15m (
   time_bucket_15m DateTime(6),
   vin TEXT NOT NULL,
@@ -109,8 +109,9 @@ PRIMARY KEY vin
 ORDER BY (vin, time_bucket_15m)
 
 CREATE MATERIALIZED VIEW fleet_metrics_15m_mv
-REFRESH EVERY 1 YEAR OFFSET 11 MONTH
-TO fleet_metrics_15m AS 
+REFRESH
+EVERY 1 YEAR OFFSET 11 MONTH
+TO fleet_metrics_15m EMPTY AS 
 WITH
     now() AS current_ts,
     900 AS bucket_length_time,
@@ -197,38 +198,33 @@ WITH
      ON other_states.time_bucket_15m = duration_per_state_and_bucket.time_bucket_15m 
      AND other_states.vin = duration_per_state_and_bucket.vin 
 
--- SELECT
---  toStartOfInterval(recorded_at, INTERVAL 15 MINUTE) AS time_bucket_15m,
---  vin,
---  -- state_agg(recorded_at, engine_state) AS state_summary,
---  '{}'::json as state_summary,
---  argMin(fuel_level_percent, recorded_at) AS starting_fuel,
---  argMax(fuel_level_percent, recorded_at) AS ending_fuel,
---  max(engine_rpm) AS max_engine_rpm,
---  min(engine_rpm) AS min_engine_rpm,
---  max(coolant_temperature) AS max_coolant_temperature,
---  min(coolant_temperature) AS min_coolant_temperature,
---  max(hydraulic_oil_temperature) AS max_hydraulic_oil_temperature,
---  min(hydraulic_oil_temperature) AS min_hydraulic_oil_temperature,
---  argMax(latitude, recorded_at) AS last_latitude,
---  argMax(longitude, recorded_at) AS last_longitude,
---  argMin(latitude, recorded_at) AS start_latitude,
---  argMin(longitude, recorded_at) AS start_longitude
--- FROM telematics_data
--- GROUP BY time_bucket_15m, vin;
-
--- SELECT add_continuous_aggregate_policy('fleet_metrics_15m',
---    start_offset => INTERVAL '1 day',
---    end_offset => INTERVAL '15 minutes',  
---    schedule_interval => INTERVAL '15 minutes'
--- );
-
+--- SELECT
+---  toStartOfInterval(recorded_at, INTERVAL 15 MINUTE) AS time_bucket_15m,
+---  vin,
+---  -- state_agg(recorded_at, engine_state) AS state_summary,
+---  '{}'::json as state_summary,
+---  argMin(fuel_level_percent, recorded_at) AS starting_fuel,
+---  argMax(fuel_level_percent, recorded_at) AS ending_fuel,
+---  max(engine_rpm) AS max_engine_rpm,
+---  min(engine_rpm) AS min_engine_rpm,
+---  max(coolant_temperature) AS max_coolant_temperature,
+---  min(coolant_temperature) AS min_coolant_temperature,
+---  max(hydraulic_oil_temperature) AS max_hydraulic_oil_temperature,
+---  min(hydraulic_oil_temperature) AS min_hydraulic_oil_temperature,
+---  argMax(latitude, recorded_at) AS last_latitude,
+---  argMax(longitude, recorded_at) AS last_longitude,
+---  argMin(latitude, recorded_at) AS start_latitude,
+---  argMin(longitude, recorded_at) AS start_longitude
+--- FROM telematics_data
+--- GROUP BY time_bucket_15m, vin;
+--- SELECT add_continuous_aggregate_policy('fleet_metrics_15m',
+---    start_offset => INTERVAL '1 day',
+---    end_offset => INTERVAL '15 minutes',  
+---    schedule_interval => INTERVAL '15 minutes'
+--- );
 -----  stop it and force update
-SYSTEM STOP REPLICATED VIEW fleet_metrics_15m_mv ;
-SYSTEM REFRESH VIEW fleet_metrics_15m_mv ;
-
+--- SYSTEM STOP REPLICATED VIEW fleet_metrics_15m_mv ;
 ---------- DAILY MACHINE USAGE
-
 CREATE TABLE daily_machine_usage (
   usage_date Date NOT NULL,
   vin TEXT NOT NULL,
@@ -238,8 +234,10 @@ CREATE TABLE daily_machine_usage (
 )
 
 CREATE MATERIALIZED VIEW daily_machine_usage_mv
-REFRESH EVERY 1 YEAR OFFSET 11 MONTH
-TO daily_machine_usage AS
+REFRESH
+-- EVERY 1 YEAR OFFSET 11 MONTH 
+AFTER 11 MONTH
+TO daily_machine_usage EMPTY AS
 WITH
     now() AS current_ts,
     24*60*60 AS bucket_length_time,
@@ -300,24 +298,10 @@ WITH
 SELECT
     time_bucket_1d::Date as usage_date , vin, working_seconds, idle_seconds, off_seconds
  FROM duration_per_state_and_bucket
-
 -- not needed for now
 -- SELECT add_continuous_aggregate_policy('daily_machine_usage',
 --     start_offset => INTERVAL '3 days', 
 --     end_offset => INTERVAL '1 hour',   
 --     schedule_interval => INTERVAL '1 hour');
-
 -----  stop it and force update
-SYSTEM STOP REPLICATED VIEW daily_machine_usage_mv ;
-SYSTEM REFRESH VIEW daily_machine_usage_mv ;
-
----- CONTINUE HERE
-
--- CREATE INDEX idx_telematics_operator ON telematics_data (operator_id);
--- CREATE INDEX idx_telematics_site ON telematics_data (site_id);
-
-
-
-
-
-
+--- SYSTEM STOP REPLICATED VIEW daily_machine_usage_mv ;
