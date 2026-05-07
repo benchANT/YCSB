@@ -8,7 +8,7 @@ fleet_size AS (
    COUNT(m.vin) AS total_machines 
  FROM date_series ds 
  LEFT JOIN machines m 
-   ON m.purchase_date <= ds.usage_date 
+   ON to_timestamp(m.purchase_date) <= ds.usage_date 
    AND m.current_status != 'Decommissioned' 
  GROUP BY ds.usage_date 
 ), 
