@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +50,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
 
     public static final String QUERY_PREFIX = "query";
 
+    private static RtIotConfiguration configuration;
     private QueryParameterGenerator parameterGenerator;
 
     @Override
@@ -70,7 +72,6 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
     }
 
     private final ThreadLocal<Integer> iterationCounter = ThreadLocal.withInitial(new MySupplier());
-    protected String table;
     protected DiscreteGenerator querychooser;
     protected String theQueryId = null;
 
@@ -160,8 +161,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
 
     @Override
     public void init(Properties p) throws WorkloadException {
-        System.err.println("Initializing TPC-DS Workload");
-        table = p.getProperty(CoreWorkload.TABLENAME_PROPERTY, CoreWorkload.TABLENAME_PROPERTY_DEFAULT);
+        System.err.println("Initializing RtIotQuery Workload");
         long threadcount = Integer.parseInt(p.getProperty(Client.THREAD_COUNT_PROPERTY, "1"));
         long opcount = Long.parseLong(p.getProperty(Client.OPERATION_COUNT_PROPERTY, "0"));
         if(threadcount > opcount) {
@@ -205,8 +205,23 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
         if(queryList != null && queryList.isEmpty()) {
             throw new WorkloadException("cannot deal with an empty query list");
         }
-        parameterGenerator = new QueryParameterGenerator(p);
+        initConfiguration(p);
+        parameterGenerator = new QueryParameterGenerator(p, configuration);
         querychooser = initOperationChooser(lowerQueryEnd, upperQueryEnd, queryList);
+    }
+
+    static synchronized void initConfiguration(Properties p) throws WorkloadException {
+        if(configuration == null) {
+            configuration = new RtIotConfiguration(p);
+        }
+    }
+
+    public static Instant getStartInstant() {
+        return configuration.startTime;
+    }
+
+    public static Instant getStopInstant() {
+        return configuration.stopTime;
     }
 
     private String pickQuery() {

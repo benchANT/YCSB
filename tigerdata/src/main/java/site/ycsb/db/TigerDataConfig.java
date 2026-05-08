@@ -34,6 +34,8 @@ public final class TigerDataConfig {
 
   public static final String JDBC_CREATE_SCHEMA = "jdbc.createschema";
 
+  public static final String JDBC_REFRESH_VIEWS = "jdbc.refreshviews";
+
   /** The name of the property for the number of fields in a record. */
   public static final String FIELD_COUNT_PROPERTY = "fieldcount";
 
@@ -56,6 +58,7 @@ public final class TigerDataConfig {
   int jdbcFetchSize;
   boolean batchUpdates;
   boolean createSchema;
+  boolean refreshViews;
   boolean autoCommit;
   static final String DEFAULT_PROP = "";
   boolean doDebug = false;
@@ -79,6 +82,7 @@ public final class TigerDataConfig {
     this.autoCommit = PropertyParser.parseBooleanProperty(props, JDBC_AUTO_COMMIT, true);
     this.createSchema = PropertyParser.parseBooleanProperty(props, JDBC_CREATE_SCHEMA, false);
     this.batchUpdates = PropertyParser.parseBooleanProperty(props, JDBC_BATCH_UPDATES, false);
+    this.refreshViews = PropertyParser.parseBooleanProperty(props, JDBC_REFRESH_VIEWS, false);
 
     try {
       connection = DriverManager.getConnection(url, user, passwd);

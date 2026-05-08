@@ -14,8 +14,8 @@ public final class QueryParameterGenerator {
     private NumberGenerator siteGenerator;
     private NumberGenerator vinGenerator;
 
-    public QueryParameterGenerator(Properties properties) throws WorkloadException {
-        configuration = new RtIotConfiguration(properties);
+    public QueryParameterGenerator(Properties properties, RtIotConfiguration configuration) throws WorkloadException {
+        this.configuration = configuration;
         this.siteGenerator = new UniformLongGenerator(0, configuration.sites - 1);
         this.vinGenerator = new UniformLongGenerator(0, configuration.machines - 1);
     }
