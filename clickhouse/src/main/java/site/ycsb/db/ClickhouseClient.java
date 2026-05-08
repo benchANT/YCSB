@@ -1,6 +1,7 @@
 package site.ycsb.db;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
@@ -235,7 +236,7 @@ public final class ClickhouseClient extends RtIotDb {
         }
         return Status.OK;
     }
-
+ClickHouseDataType da;
     private void parseResults(ClickHouseBinaryFormatReader reader, List<java.util.HashMap<String, site.ycsb.ByteIterator>> result) {
         TableSchema schema = reader.getSchema();
         Map<String,ClickHouseDataType> columns = new HashMap<>();
@@ -266,8 +267,8 @@ public final class ClickhouseClient extends RtIotDb {
                     case Date:
                     case Date32:
                         // Instant i4 = reader.getInstant(s);
-                        ZonedDateTime zdt = reader.getZonedDateTime(s);
-                        bit.put(s, new StringByteIterator(zdt.toString()));
+                        LocalDate ld = reader.getLocalDate(s);
+                        bit.put(s, new StringByteIterator(ld.toString()));
                         break;
                     case DateTime32:
                         Instant i2 = reader.getInstant(s);
