@@ -124,11 +124,11 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
     }
 
     private boolean doMachinesInsert(RtIotDb db, Object threadState) {
-        System.err.println("Checking if we need to insert machines. Current count: " + machinesInitHandler.count());
         if(machinesInitHandler.isDone()) {
             // we may need a countdown latch here.
             return false;
         }
+        System.err.println("Still adding machines. Current count: " + machinesInitHandler.count());
         List<RtIotMachineData> batchEntries = new ArrayList<>();
         boolean done = machinesInitHandler.generateMachinesBatch(batchEntries);
         if(done) {
@@ -141,11 +141,11 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
     }
 
     private boolean doSitesInsert(RtIotDb db, Object threadState) {
-        System.err.println("Checking if we need to insert sites. Current count: " + sitesInitHandler.count());
         if(sitesInitHandler.isDone()) {
             // we may need a countdown latch here.
             return false;
         }
+        System.err.println("Still adding sites. Current count: " + sitesInitHandler.count());
         List<RtIotSitesData> batchEntries = new ArrayList<>();
         boolean done = sitesInitHandler.generateSitesBatch(batchEntries);
         if(done) {
@@ -158,11 +158,11 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
     }
 
     private boolean doOperatorInsert(RtIotDb db, Object threadState) {
-        System.err.println("Checking if we need to insert operators. Current count: " + operatorInitHandler.count());
         if(operatorInitHandler.isDone()) {
             // we may need a countdown latch here.
             return false;
         }
+        System.err.println("Still adding operators. Current count: " + operatorInitHandler.count());
         List<RtIotOperatorData> batchEntries = new ArrayList<>();
         boolean done = operatorInitHandler.generateOperatorBatch(batchEntries);
         if(done) {
