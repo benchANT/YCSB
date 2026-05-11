@@ -31,6 +31,7 @@ public class TigerDataClient extends RtIotDb {
   private ConcurrentMap<String, PreparedStatement> cachedInsertStatements = new ConcurrentHashMap<String, PreparedStatement>();
   private ConcurrentMap<String, PreparedStatement> cachedQueryStatements = new ConcurrentHashMap<String, PreparedStatement>();
 
+  private static boolean schemaInitialized = false;
   /**
    * Ordered field information for insert and update statements.
 
@@ -77,6 +78,22 @@ public class TigerDataClient extends RtIotDb {
   /** Returns parsed boolean value from the properties if set, otherwise returns defaultVal. * /
   */
 
+  private synchronized static void initDbStructure(TigerDataConfig config) throws DBException {
+    config.initialized = true;
+    if(TigerDataClient.schemaInitialized) {
+      return;
+    }
+    if(config.createSchema == true) {
+      InitHelper.createSchema(config.connection);
+    }
+    if(config.refreshViews == true) {
+      InitHelper.refreshViews(config);
+      // try { Thread.sleep(10000); }
+      // catch(InterruptedException ex){ Thread.currentThread().interrupt();}
+    }
+    TigerDataClient.schemaInitialized = true;
+  }
+
   @Override
   public void init() throws DBException {
     if (config.initialized) {
@@ -86,14 +103,7 @@ public class TigerDataClient extends RtIotDb {
     
     try {
         config.init(getProperties());
-        if(config.createSchema == true) {
-          InitHelper.createSchema(config.connection);
-        }
-        if(config.refreshViews == true) {
-          InitHelper.refreshViews(config);
-          // try { Thread.sleep(10000); }
-          // catch(InterruptedException ex){ Thread.currentThread().interrupt();}
-        }
+        initDbStructure(config);
         initInsertPreparedStatements();
     }
     /*
@@ -113,7 +123,6 @@ public class TigerDataClient extends RtIotDb {
       System.err.println("Invalid value for fieldcount property. " + e);
       throw new DBException(e);
     }
-    config.initialized = true;
   }
 
   private void initInsertPreparedStatements() throws SQLException {
