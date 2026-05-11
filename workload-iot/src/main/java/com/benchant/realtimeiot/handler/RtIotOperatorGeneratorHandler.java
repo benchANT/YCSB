@@ -1,6 +1,7 @@
 package com.benchant.realtimeiot.handler;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.benchant.realtimeiot.data.RtIotOperatorData;
@@ -12,12 +13,18 @@ public final class RtIotOperatorGeneratorHandler {
 
     public static final int OPERATOR_BATCH_SIZE = 100;
 
+    private final CountDownLatch latch;
     private final int totalOperators;
     private final AtomicInteger operatorIdCounter = new AtomicInteger(0);
     private final UniformLongGenerator nameLengthGenerator = new UniformLongGenerator(3, 11);
 
     public RtIotOperatorGeneratorHandler(int totalOperators) {
+        this(totalOperators, 1);
+    }
+
+    public RtIotOperatorGeneratorHandler(int totalOperators, int threads) {
         this.totalOperators = totalOperators;
+        this.latch = new CountDownLatch(threads);
     }
 
     public int count() {
@@ -26,6 +33,16 @@ public final class RtIotOperatorGeneratorHandler {
 
     public boolean isDone() {
         return operatorIdCounter.get() >= totalOperators;
+    }
+
+    public void waitForEveryoneDone() {
+        latch.countDown();
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            System.err.println(Thread.currentThread().getName() + "Interrupted while waiting for operator insert to complete.");
+            Thread.currentThread().interrupt();
+        }
     }
 
     public boolean generateOperatorBatch(List<RtIotOperatorData> batchEntries) {

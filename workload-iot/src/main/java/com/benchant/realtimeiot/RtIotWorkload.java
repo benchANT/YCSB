@@ -3,6 +3,7 @@ package com.benchant.realtimeiot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.htrace.core.Tracer;
@@ -15,6 +16,7 @@ import com.benchant.realtimeiot.handler.RtIotMachinesGeneratorHandler;
 import com.benchant.realtimeiot.handler.RtIotOperatorGeneratorHandler;
 import com.benchant.realtimeiot.handler.RtIotSitesGeneratorHandler;
 
+import site.ycsb.Client;
 import site.ycsb.Workload;
 import site.ycsb.WorkloadException;
 import site.ycsb.generator.DiscreteGenerator;
@@ -69,7 +71,8 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
             senderGroups.add(new RIotSenderGroupMetaData(i, groupMachines, firstMachineId));
             firstMachineId += groupMachines;
         }
-
+        int threadcount = Integer.parseInt(properties.getProperty(Client.THREAD_COUNT_PROPERTY, "1"));
+        System.err.println("using threadcount value of '" + threadcount + "'");
         // configuration.senderFrequency tells us the interval between two batches of entries for a sender. We can use this information to compute how many entries we need to create per batch and sender to achieve the required frequency.
         int totalSeconds = (int) (configuration.stopTime.getEpochSecond() - configuration.startTime.getEpochSecond());
         int totalBatchesRemainder = totalSeconds % configuration.senderFrequency;
@@ -79,9 +82,9 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
         this.requiredTimeSteps = (totalSeconds / configuration.senderFrequency) + (totalBatchesRemainder > 0 ? 1 : 0);
         this.siteGenerator = new UniformLongGenerator(0, configuration.sites - 1);
         this.operatorGenerator = new UniformLongGenerator(0, configuration.operators - 1);
-        this.operatorInitHandler = new RtIotOperatorGeneratorHandler(configuration.operators);
-        this.sitesInitHandler = new RtIotSitesGeneratorHandler(configuration.sites);
-        this.machinesInitHandler = new RtIotMachinesGeneratorHandler(configuration.machines);
+        this.operatorInitHandler = new RtIotOperatorGeneratorHandler(configuration.operators, threadcount);
+        this.sitesInitHandler = new RtIotSitesGeneratorHandler(configuration.sites, threadcount);
+        this.machinesInitHandler = new RtIotMachinesGeneratorHandler(configuration.machines, threadcount);
     }
     
     @Override
@@ -125,52 +128,43 @@ public final class RtIotWorkload extends Workload<RtIotDb> {
 
     private boolean doMachinesInsert(RtIotDb db, Object threadState) {
         if(machinesInitHandler.isDone()) {
-            // we may need a countdown latch here.
+            machinesInitHandler.waitForEveryoneDone();
             return false;
         }
         System.err.println("Still adding machines. Current count: " + machinesInitHandler.count());
         List<RtIotMachineData> batchEntries = new ArrayList<>();
         boolean done = machinesInitHandler.generateMachinesBatch(batchEntries);
-        if(done) {
-            return false;
+        if(batchEntries.size() > 0) {
+            db.insertMachineData(batchEntries);
         }
-        // System.err.println("Inserting batch for machines with " + batchEntries.size() + " entries.");
-        // System.err.println("\t" + batchEntries);
-        db.insertMachineData(batchEntries);
         return true;
     }
 
     private boolean doSitesInsert(RtIotDb db, Object threadState) {
         if(sitesInitHandler.isDone()) {
-            // we may need a countdown latch here.
+            sitesInitHandler.waitForEveryoneDone();
             return false;
         }
         System.err.println("Still adding sites. Current count: " + sitesInitHandler.count());
         List<RtIotSitesData> batchEntries = new ArrayList<>();
         boolean done = sitesInitHandler.generateSitesBatch(batchEntries);
-        if(done) {
-            return false;
+        if(batchEntries.size() > 0) {
+            db.insertSiteData(batchEntries);
         }
-        // System.err.println("Inserting batch for sites with " + batchEntries.size() + " entries.");
-        // System.err.println("\t" + batchEntries);
-        db.insertSiteData(batchEntries);
-        return false;
+        return true;
     }
 
     private boolean doOperatorInsert(RtIotDb db, Object threadState) {
         if(operatorInitHandler.isDone()) {
-            // we may need a countdown latch here.
+            operatorInitHandler.waitForEveryoneDone();
             return false;
         }
         System.err.println("Still adding operators. Current count: " + operatorInitHandler.count());
         List<RtIotOperatorData> batchEntries = new ArrayList<>();
         boolean done = operatorInitHandler.generateOperatorBatch(batchEntries);
-        if(done) {
-            return false;
+        if(batchEntries.size() > 0) {
+            db.insertOperatorData(batchEntries);
         }
-        // System.err.println("Inserting batch for operators with " + batchEntries.size() + " entries.");
-        // System.err.println("\t" + batchEntries);
-        db.insertOperatorData(batchEntries);
         return true;
 
     }
