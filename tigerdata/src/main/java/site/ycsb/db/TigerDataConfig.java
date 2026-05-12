@@ -62,6 +62,9 @@ public final class TigerDataConfig {
   boolean autoCommit;
   static final String DEFAULT_PROP = "";
   boolean doDebug = false;
+  private String url;
+  private String user;
+  private String passwd;
   
     public void init(Properties props) throws DBException {
     if (initialized) {
@@ -69,9 +72,9 @@ public final class TigerDataConfig {
       return;
     }
 
-    String url = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
-    String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
-    String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
+    url = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
+    user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
+    passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
     String driver = props.getProperty(DRIVER_CLASS);
 
     doDebug = Boolean.parseBoolean(props.getProperty("debug", "false"));
@@ -87,9 +90,6 @@ public final class TigerDataConfig {
     try {
       connection = DriverManager.getConnection(url, user, passwd);
       connection.setAutoCommit(autoCommit);
-      // for a longer explanation see the README.md
-      // semicolons aren't present in JDBC urls, so we use them to delimit
-      // multiple JDBC connections to shard across.
     } /* catch (ClassNotFoundException e) {
       System.err.println("Error in initializing the JDBS driver: " + e);
       throw new DBException(e);
@@ -100,6 +100,10 @@ public final class TigerDataConfig {
       System.err.println("Invalid value for fieldcount property. " + e);
       throw new DBException(e);
     }
+  }
+
+  public Connection getTmpConnection() throws SQLException {
+    return DriverManager.getConnection(url, user, passwd);
   }
 
   public void cleanup() throws DBException {
