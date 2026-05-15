@@ -1,8 +1,16 @@
 package site.ycsb.db;
 
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
+import com.benchant.realtimeiot.RIotQueryWorkload;
 import com.clickhouse.client.api.Client;
 import com.clickhouse.client.api.command.CommandResponse;
 import com.clickhouse.client.api.command.CommandSettings;
@@ -15,6 +23,9 @@ public final class InitHelper {
 
     public static String SCHEMA_FILE_NAME = "schema";
     public static String REFRESH_FILE_NAME = "refresh_views.sql";
+    public static String FLEET_METRICS_FILE_NAME = "refresh_fleet_metrics.sql";
+    public static String REFRESH_OPERATOR_ACTIVITY_FILE_NAME = "refresh_operator_activity.sql";
+    public static String REFRESH_DAILY_MACHINE_USAGE_FILE_NAME = "refresh_daily_machine_usage.sql";
 
     static void helpWithInit(Client client, Properties props, String databaseName) throws DBException {
 
@@ -53,7 +64,7 @@ public final class InitHelper {
         }
     }
 
-    static void runOperationsFromFilename(Client client, String filename) throws DBException {
+    static void runOperationsFromFilename(Client client, String filename, Map<String, String> replacements) throws DBException {
 
         String schemaDefinition = Utils.readByteStreamToString(
             ClassLoader.getSystemResourceAsStream(filename)
@@ -68,7 +79,11 @@ public final class InitHelper {
         System.err.println(String.join("\n>=====<\n", schemaDefinitions));
         System.err.println("=============================");
         for(String query: schemaDefinitions) {
-            runOperation(client, query);
+            String sendQuery = query;
+            for(String key : replacements.keySet()) {
+                sendQuery = sendQuery.replaceAll(key, replacements.get(key));
+            }
+            runOperation(client, sendQuery);
         }
         /*
         connection.setAutoCommit(true);
@@ -81,13 +96,40 @@ public final class InitHelper {
         }
         */
     }
+    private static String formatInstant(Instant instant) {
+        return instant.toString()
+            .replace("T", " ")
+            .replace("Z", "")
+                + "."  + 
+                instant.get(ChronoField.MICRO_OF_SECOND);
+    }
 
     static void refreshViews(Client client) throws DBException {
-        runOperationsFromFilename(client, REFRESH_FILE_NAME);
+        Instant current = RIotQueryWorkload.getStartInstant().minus(1, ChronoUnit.DAYS);
+        Instant stop = RIotQueryWorkload.getStopInstant().plus(1, ChronoUnit.DAYS);
+        while(current.isBefore(stop)) {
+            final Instant dayStart = current;
+            final Instant dayEnd = current.plus(1, ChronoUnit.DAYS);
+            System.err.println("refreshing views for day " + dayStart + " to " + dayEnd);
+            Map<String,String> replacements = new HashMap<>();
+            replacements.put("START_DAY", formatInstant(dayStart));
+            replacements.put("END_DAY", formatInstant(dayEnd));
+            runOperationsFromFilename(client, FLEET_METRICS_FILE_NAME, replacements);
+            runOperationsFromFilename(client, REFRESH_OPERATOR_ACTIVITY_FILE_NAME, replacements);
+            runOperationsFromFilename(client, REFRESH_DAILY_MACHINE_USAGE_FILE_NAME, replacements);
+            current = current.plus(1, ChronoUnit.DAYS);
+            // System.err.println("refreshing views for day " + current.toString() + " to " + interval_end.toString());
+            // Map<String,String> replacements = new HashMap<>();
+            // replacements.put("START_DAY", current.toString());
+            // replacements.put("END_DAY", interval_end.toString());
+            // runOperationsFromFilename(config.connection, REFRESH_FILE_NAME, replacements);
+            // current = interval_end;
+            // interval_end = interval_end.plus(1, ChronoUnit.DAYS);
+        }
     }
     
     static void createSchema(Client client) throws DBException {
-        runOperationsFromFilename(client, SCHEMA_FILE_NAME);
+        runOperationsFromFilename(client, SCHEMA_FILE_NAME, Collections.emptyMap());
     }
 
     private InitHelper() {

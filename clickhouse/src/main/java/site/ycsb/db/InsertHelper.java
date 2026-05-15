@@ -5,19 +5,14 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.TimeZone;
 
 import com.benchant.realtimeiot.data.RtIotMachineData;
 import com.benchant.realtimeiot.data.RtIotOperatorData;
 import com.benchant.realtimeiot.data.RtIotSensorData;
 import com.benchant.realtimeiot.data.RtIotSitesData;
-
-import site.ycsb.db.InsertHelper.MachineHelper;
-import site.ycsb.db.InsertHelper.SiteHelper;
 
 public class InsertHelper {
     static final String OPERATOR_KEY = "operator";

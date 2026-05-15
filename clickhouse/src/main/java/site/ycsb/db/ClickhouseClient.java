@@ -3,7 +3,6 @@ package site.ycsb.db;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
@@ -41,7 +40,6 @@ import site.ycsb.db.InsertHelper.MachineHelper;
 import site.ycsb.db.InsertHelper.OperatorHelper;
 import site.ycsb.db.InsertHelper.SiteHelper;
 import site.ycsb.db.InsertHelper.TelematicsHelper;
-import site.ycsb.util.PropertyParser;
 
 public final class ClickhouseClient extends RtIotDb {
 
