@@ -106,5 +106,6 @@ public class Status {
       "service for the current binding is not available.");
   public static final Status BATCHED_OK = new Status("BATCHED_OK", "The operation has been batched by " +
       "the binding to be executed later.");
+  public static final Status TIMEOUT = new Status("TIMEOUT", "The operation timed out.");
 }
 

@@ -1,5 +1,6 @@
 package site.ycsb.db;
 
+import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,6 +21,7 @@ import com.benchant.realtimeiot.data.RtIotOperatorData;
 import com.benchant.realtimeiot.data.RtIotSensorData;
 import com.benchant.realtimeiot.data.RtIotSitesData;
 import com.clickhouse.client.api.Client;
+import com.clickhouse.client.api.DataTransferException;
 import com.clickhouse.client.api.data_formats.ClickHouseBinaryFormatReader;
 import com.clickhouse.client.api.data_formats.RowBinaryWithNamesAndTypesFormatReader;
 import com.clickhouse.client.api.data_formats.internal.BinaryStreamReader.ByteBufferAllocator;
@@ -205,6 +207,13 @@ public final class ClickhouseClient extends RtIotDb {
             // Create a reader to access the data in a convenient way
             reader = new RowBinaryWithNamesAndTypesFormatReader(response.getInputStream(), response.getSettings(), myAllocator);
             parseResults(reader, result);
+        } catch(DataTransferException ex) {
+            debug("Exception occurred: " + ex.getMessage() + " (" + ex.getClass() + ")" );
+            if(ex.getCause() instanceof TimeoutException ||
+               ex.getCause() instanceof SocketTimeoutException) {
+                return Status.TIMEOUT;
+            }
+            return Status.ERROR;
         } catch(InterruptedException | TimeoutException | ExecutionException ex) {
             debug("Exception occurred: " + ex.getMessage() + " (" + ex.getClass() + ")" );
             return Status.ERROR;
