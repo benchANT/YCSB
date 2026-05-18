@@ -109,7 +109,10 @@ public final class ClickhouseClient extends RtIotDb {
             // batchsize = Integer.parseInt(props.getProperty(BATCH_SIZE, "1"));
             querySettings = new QuerySettings()
                 .logComment("{ \"clients\": \"" + clients + "\" }")
-                .setMaxExecutionTime(queryTimeoutSeconds);
+                .setMaxExecutionTime(queryTimeoutSeconds)
+                .setOption("timeout_overflow_mode", "throw")  // Ensure strict timeout enforcement
+                .setOption("max_execution_time_leaf", queryTimeoutSeconds)  // For distributed queries
+                .setOption("timeout_overflow_mode_leaf", "throw");  // Leaf node timeout behavior
             client = new Client.Builder()
                 .addEndpoint(endpoint)
                 .setUsername(user)
@@ -119,8 +122,11 @@ public final class ClickhouseClient extends RtIotDb {
                 .setMaxRetries(0)
                 .useAsyncRequests(false)
                 .setDefaultDatabase(database)
-                .setExecutionTimeout(queryTimeoutSeconds, ChronoUnit.SECONDS)
-                .setSocketTimeout((queryTimeoutSeconds + 2) * 1000)
+                .setConnectTimeout(5, ChronoUnit.SECONDS)              // TCP connection establishment
+                .setConnectionRequestTimeout(10, ChronoUnit.SECONDS)   // Get from pool
+                .setConnectionTTL(300, ChronoUnit.SECONDS) 
+                .setExecutionTimeout(queryTimeoutSeconds * 2, ChronoUnit.SECONDS)
+                .setSocketTimeout(queryTimeoutSeconds * 3 * 1000)
                 .build();
             
             InitHelper.helpWithInit(client, props, database);
