@@ -18,13 +18,13 @@ import site.ycsb.ByteIterator;
 import site.ycsb.Client;
 import site.ycsb.Workload;
 import site.ycsb.WorkloadException;
-import site.ycsb.generator.DiscreteGenerator;
-import site.ycsb.workloads.CoreWorkload;
+import site.ycsb.generator.Generator;
+import site.ycsb.workloads.olap.QueryGeneratorBuilder;
+import static site.ycsb.workloads.olap.QueryGeneratorBuilder.MAX_NUM_QUERIES;
+import static site.ycsb.workloads.olap.QueryGeneratorBuilder.MAX_QUERY_DIGITS;;
 
 public final class RIotQueryWorkload extends Workload<RtIotDb> {
 
-    public static final int MAX_NUM_QUERIES = 32;
-    private static final int MAX_QUERY_DIGITS = Math.max(computeDigits(MAX_NUM_QUERIES), 2);
     /**
      * The query ids to use for this benchmark run.
      */
@@ -48,10 +48,9 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
     public static final String TPCDS_QUERIES_UPPER_END = "rtiot.queries.upper";
     public static final String TPCDS_QUERIES_LIST = "rtiot.queries.list";
 
-    public static final String QUERY_PREFIX = "query";
-
     private static RtIotConfiguration configuration;
     private QueryParameterGenerator parameterGenerator;
+    protected Generator<?> querychooser;
 
     @Override
     public RtIotDb createDbWrapper(RtIotDb db, Tracer tracer) {
@@ -72,7 +71,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
     }
 
     private final ThreadLocal<Integer> iterationCounter = ThreadLocal.withInitial(new MySupplier());
-    protected DiscreteGenerator querychooser;
+    // protected DiscreteGenerator querychooser;
     protected String theQueryId = null;
 
     @Override
@@ -80,30 +79,10 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
         throw new IllegalStateException("doInsert is not supported for AnalyticsQueryWorkload");
     }
 
-    private static int computeDigits(int a) {
-        int digits = 0;
-        int tmp = Math.abs(a);
-        while(tmp > 9) {
-            digits = digits + 1;
-            tmp = tmp / 10;
-        }
-        return digits + 1;
-    }
-
-    public static String getPaddedQueryId(int value, int maxDigits) {
-        final int myDigits = computeDigits(value);
-        StringBuilder b = new StringBuilder();
-        for(int j = myDigits; j < maxDigits; j++) {
-            b.append("0");
-        }
-        b.append(value);
-        return QUERY_PREFIX + b.toString();
-    }
-
     private void initQueries(Properties p) throws IOException {
         String searchPrefix = p.getProperty(TPCDS_QUERY_SEARCH_PREFIX_PROPERTY);
         for(int i = 1; i <= MAX_NUM_QUERIES; i++) {
-            String key = getPaddedQueryId(i, MAX_QUERY_DIGITS);
+            String key = QueryGeneratorBuilder.getPaddedQueryId(i, MAX_QUERY_DIGITS);
             String path = searchPrefix == null
                 ? key
                 : searchPrefix + "/" + key;
@@ -126,7 +105,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
             QueryRegistry.INSTANCE.addQuery(key, b.toString());
         }
     }
-
+    /*
     private static DiscreteGenerator initOperationChooser(int lowerQueryEnd, int upperQueryEnd, List<String> qList) throws WorkloadException {
         int options = 0;
         DiscreteGenerator querychooser = new DiscreteGenerator();
@@ -142,7 +121,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
             throw new WorkloadException("no query adeed to querychooser");
         }
         return querychooser;
-    }
+    }*/
 
     private List<String> initQueryList(String queryList) {
         if(queryList == null) return null;
@@ -152,7 +131,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
             String t = s.trim();
             try { 
                 int j = Integer.parseInt(t); 
-                t = getPaddedQueryId(j, MAX_QUERY_DIGITS);
+                t = QueryGeneratorBuilder.getPaddedQueryId(j, MAX_QUERY_DIGITS);
             } catch(NumberFormatException nex) {}
             queries.add(t);
         }
@@ -207,7 +186,9 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
         }
         initConfiguration(p);
         parameterGenerator = new QueryParameterGenerator(p, configuration);
-        querychooser = initOperationChooser(lowerQueryEnd, upperQueryEnd, queryList);
+        querychooser = QueryGeneratorBuilder.initOperationChooser(p, lowerQueryEnd, upperQueryEnd, queryList);
+
+        // querychooser = initOperationChooser(lowerQueryEnd, upperQueryEnd, queryList);
     }
 
     static synchronized void initConfiguration(Properties p) throws WorkloadException {
