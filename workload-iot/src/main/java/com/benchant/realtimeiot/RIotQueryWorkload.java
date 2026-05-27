@@ -99,7 +99,7 @@ public final class RIotQueryWorkload extends Workload<RtIotDb> {
                 if(line == null) {
                     break;
                 }
-                b.append(line);
+                b.append(line).append("\n");;
             }
             System.err.println("adding query: " + key + " --- " + b.toString());
             QueryRegistry.INSTANCE.addQuery(key, b.toString());
