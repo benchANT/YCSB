@@ -175,7 +175,9 @@ public final class QueryFiller {
         Instant t = (Instant) params.get(RIotParameterConstants.TIMESTAMP_UPPER);
         String s = t == null ? "now()" : "toDateTime64('" + dateFormatter.format(t) + "', 3, 'UTC')";
         params.remove(RIotParameterConstants.TIMESTAMP_UPPER);
-        return rawQuery.replaceAll(INTERVAL_PLACEHOLDER, s + " - INTERVAL '1 MONTH'");
+        return rawQuery
+            .replaceAll(INTERVAL_PLACEHOLDER, s + " - INTERVAL '1 MONTH'")
+            .replaceAll("LATEST_TIMESTAMP", s); 
     }
 
     private static String patchQuery04(String rawQuery, Map<String, Object> params) {

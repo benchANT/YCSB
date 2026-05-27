@@ -24,7 +24,7 @@ SELECT
  s.address AS site_name, 
  COUNT(w.vin) AS total_active_machine_days, 
  SUM(w.is_wasted_day) AS wasted_machine_days, 
- ROUND((SUM(w.is_wasted_day)::numeric / COUNT(w.vin)) * 100, 2) AS percent_wasted 
+ ROUND((SUM(w.is_wasted_day) * 190 / COUNT(w.vin)), 2) AS percent_wasted 
 FROM wasted_machine_days w 
 JOIN sites s ON w.site_id = s.site_id 
 GROUP BY w.site_id, s.address 

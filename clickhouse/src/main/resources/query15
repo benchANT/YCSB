@@ -23,7 +23,7 @@ SELECT
  s.address AS site_address, 
  d.active_machines, 
  d.total_machines_present, 
- ROUND((d.active_machines::numeric / d.total_machines_present) * 100, 2) AS utilization_percentage 
+ ROUND((d.active_machines * 100.0 / d.total_machines_present), 2) AS utilization_percentage 
 FROM daily_site_totals d 
 JOIN sites s ON d.site_id = s.site_id 
 ORDER BY d.usage_date DESC, utilization_percentage ASC

@@ -3,7 +3,7 @@ WITH valid_operator_pings AS (
    vin, 
    recorded_at, 
    operator_id, 
-   LAG(operator_id) OVER (PARTITION BY vin ORDER BY recorded_at) AS prev_operator_id 
+   LAG(toNullable(operator_id)) OVER (PARTITION BY vin ORDER BY recorded_at) AS prev_operator_id 
  FROM telematics_data 
  WHERE recorded_at >= INTERVAL_PLACEHOLDER 
    AND operator_id IS NOT NULL 

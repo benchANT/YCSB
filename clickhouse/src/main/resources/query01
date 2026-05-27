@@ -1,31 +1,33 @@
 WITH data_with_prev_state AS (
   SELECT
     vin,
-    site_id,
     recorded_at,
+    site_id,
+    lag(toNullable(site_id)) OVER (PARTITION BY vin ORDER BY recorded_at) AS prev_site,
     engine_state,
     lag(engine_state) OVER (PARTITION BY vin ORDER BY recorded_at) AS prev_state
     FROM telematics_data
-    WHERE site_id = {siteId:UInt32} AND
-          recorded_at >= INTERVAL_PLACEHOLDER 
+    WHERE recorded_at >= INTERVAL_PLACEHOLDER 
 ), 
 interval_per_state AS (
   SELECT * FROM data_with_prev_state
-  WHERE engine_state != prev_state OR prev_state IS NULL
-), 
+  WHERE engine_state != prev_state OR prev_state IS NULL OR site_id != prev_site
+),  
 duration_per_interval AS (
   SELECT
     vin,
     site_id,
+    prev_site,
     engine_state,
     recorded_at AS start_ts,
     lead(toNullable(recorded_at)) OVER (PARTITION BY vin ORDER BY recorded_at) AS end_ts,
     dateDiff(
         'second',
         start_ts,
-        coalesce(end_ts, now())
+        coalesce(end_ts, LATEST_TIMESTAMP)
     ) AS duration
   FROM interval_per_state
+  WHERE site_id = {siteId:UInt32} OR prev_site = {siteId:UInt32}
 ) 
 SELECT
     vin,
@@ -34,4 +36,6 @@ SELECT
     sumIf(duration, engine_state = 'Idle') AS idle_seconds,
     working_seconds + idle_seconds AS total_operating_time  
 FROM duration_per_interval 
+WHERE site_id = {siteId:UInt32} 
 GROUP BY vin, site_id
+order by vin

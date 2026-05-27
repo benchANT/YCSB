@@ -13,9 +13,9 @@ SELECT
  o.operator_id,
  o.first_name,
  o.last_name,
- ROUND((d.daily_working_pings / 60.0)::numeric, 2) AS working_hours,
- ROUND((d.daily_idle_pings / 60.0)::numeric, 2) AS idle_hours,
- ROUND(((d.daily_working_pings + d.daily_idle_pings) / 60.0)::numeric, 2) AS total_hours_worked 
+ ROUND((d.daily_working_pings / 60.0), 2) AS working_hours,
+ ROUND((d.daily_idle_pings / 60.0), 2) AS idle_hours,
+ ROUND(((d.daily_working_pings + d.daily_idle_pings) / 60.0), 2) AS total_hours_worked 
 FROM daily_ping_totals d 
 JOIN operators o ON d.operator_id = o.operator_id 
 WHERE (d.daily_working_pings + d.daily_idle_pings) > 0 

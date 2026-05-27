@@ -22,7 +22,7 @@ SELECT
  s.address AS site_name, 
  w.active_machine_days, 
  w.total_machine_days, 
- ROUND((w.active_machine_days::numeric / NULLIF(w.total_machine_days, 0)) * 100, 2) AS weekly_utilization_pct 
+ ROUND((w.active_machine_days * 100.0 / NULLIF(w.total_machine_days, 0)), 2) AS weekly_utilization_pct 
 FROM weekly_site_rollup w 
 JOIN sites s ON w.site_id = s.site_id  
 WHERE w.total_machine_days > 5 
