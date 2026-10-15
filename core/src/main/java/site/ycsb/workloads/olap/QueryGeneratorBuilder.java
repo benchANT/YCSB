@@ -13,7 +13,7 @@ public interface QueryGeneratorBuilder {
     public static final int MAX_QUERY_DIGITS = Math.max(QueryGeneratorBuilder.computeDigits(MAX_NUM_QUERIES), 2);
 
     public static final String QUERYS_SELECTION_STRATEGY_PROPERTY = "olap.queryselection";
-    public static final String QUERYS_SELECTION_STRATEGY_PROPERTY_DEFAULT = "radom";
+    public static final String QUERYS_SELECTION_STRATEGY_PROPERTY_DEFAULT = "random";
     public static final String QUERYS_SEQUENTIAL_SELECTION_STRATEGY_COUNT_PROPERTY = "olap.queryselection.sequential.count";
     public static final String QUERYS_SEQUENTIAL_SELECTION_STRATEGY_COUNT_PROPERTY_DEFAULT = "1";
     
