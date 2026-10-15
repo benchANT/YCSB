@@ -31,6 +31,7 @@ public class TigerDataClient extends RtIotDb {
   private ConcurrentMap<String, PreparedStatement> cachedInsertStatements = new ConcurrentHashMap<String, PreparedStatement>();
   private ConcurrentMap<String, PreparedStatement> cachedQueryStatements = new ConcurrentHashMap<String, PreparedStatement>();
 
+  private static String explainPrefix;
   private static boolean schemaInitialized = false;
   /**
    * Ordered field information for insert and update statements.
@@ -103,6 +104,7 @@ public class TigerDataClient extends RtIotDb {
     
     try {
         config.init(getProperties());
+        explainPrefix = InitHelper.initExplainMode(getProperties());
         initDbStructure(config);
         initInsertPreparedStatements();
     }
@@ -255,7 +257,7 @@ public class TigerDataClient extends RtIotDb {
             return Status.UNEXPECTED_STATE;
         }
         String[] patched = QueryFiller.patchQueryString(queryId, rawQuery, params);
-        String cacheQuery = patched[1];
+        String cacheQuery = explainPrefix + patched[1];
         PreparedStatement readStatement = cachedQueryStatements.get(cacheQuery);
         try {
             if (readStatement == null) {

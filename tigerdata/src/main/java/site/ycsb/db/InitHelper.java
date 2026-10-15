@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -24,6 +25,7 @@ public final class InitHelper {
     
     public static String SCHEMA_FILE_NAME = "schema";
     public static String REFRESH_FILE_NAME = "refresh_views.sql";
+    public static String TIGERDATA_EXPLAIN_MODE = "tigerdata.explainmode";
 
     static void refreshViews(TigerDataConfig config) throws DBException {
         ExecutorService executor = Executors.newFixedThreadPool(40);
@@ -76,6 +78,19 @@ public final class InitHelper {
     static void createSchema(Connection connection) throws DBException {
         runOperationsFromFilename(connection, SCHEMA_FILE_NAME, Collections.emptyMap());
         System.err.println("schema creation triggered and successfully executed");
+    }
+
+    static String initExplainMode(Properties props) {
+        String explainMode = props.getProperty(TIGERDATA_EXPLAIN_MODE, "none");
+        switch(explainMode.toLowerCase()) {
+            case "none":
+                return "";
+            case "explain":
+                return "EXPLAIN ";
+            default:
+                System.err.println("Unknown explain mode: " + explainMode + ". Defaulting to 'none'.");
+                return "";
+        }
     }
 
     static void runOperationsFromFilename(Connection connection, String filename, Map<String, String> replacements) throws DBException {
