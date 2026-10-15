@@ -74,7 +74,7 @@ public final class ClickhouseClient extends RtIotDb {
     private static int queryTimeoutSeconds;
     private static Client client;
     private static boolean doDebug = false;
-    private static boolean createSchema = false;
+    private static String explainPrefix;
     private final ByteBufferAllocator myAllocator = new CachingByteBufferAllocator();
     private int batchCounter = 0;
 
@@ -136,6 +136,7 @@ public final class ClickhouseClient extends RtIotDb {
             registerSchemaMapper(MACHINE_TABLE_NAME, MachineHelper.class);
             registerSchemaMapper(TELEMATICS_TABLE_NAME, TelematicsHelper.class);
             doDebug = Boolean.parseBoolean(props.getProperty("debug", "false"));
+            explainPrefix = InitHelper.initExplainMode(props);
             printClickhouseConfig(maxConnections);
         }
     }
@@ -152,6 +153,7 @@ public final class ClickhouseClient extends RtIotDb {
         System.err.println("using debug: " + doDebug);
         System.err.println("using client settings: " + client.getConfiguration());
         System.err.println("using batch size: " + batchsize);
+        System.err.println("using explain prefix: '" + explainPrefix + "'");
     }
 
     private Status insertAny(String tableName, List<?> toSend) {
@@ -196,7 +198,7 @@ public final class ClickhouseClient extends RtIotDb {
             return Status.UNEXPECTED_STATE;
         }
         String[] patched = QueryFiller.patchQueryString(queryId, rawQuery, params);
-        String nextQuery = patched[1];
+        String nextQuery = explainPrefix + patched[1];
         if(doDebug) {
             System.err.println("\nrunning query '" + queryId + "' with parameters " + params);
             System.err.println("\n\t '" + nextQuery);

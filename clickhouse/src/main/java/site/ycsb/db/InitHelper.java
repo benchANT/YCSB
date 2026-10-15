@@ -21,11 +21,12 @@ import site.ycsb.util.PropertyParser;
 
 public final class InitHelper {
 
-    public static String SCHEMA_FILE_NAME = "schema";
-    public static String REFRESH_FILE_NAME = "refresh_views.sql";
-    public static String FLEET_METRICS_FILE_NAME = "refresh_fleet_metrics.sql";
-    public static String REFRESH_OPERATOR_ACTIVITY_FILE_NAME = "refresh_operator_activity.sql";
-    public static String REFRESH_DAILY_MACHINE_USAGE_FILE_NAME = "refresh_daily_machine_usage.sql";
+    public static final String SCHEMA_FILE_NAME = "schema";
+    public static final String REFRESH_FILE_NAME = "refresh_views.sql";
+    public static final String FLEET_METRICS_FILE_NAME = "refresh_fleet_metrics.sql";
+    public static final String REFRESH_OPERATOR_ACTIVITY_FILE_NAME = "refresh_operator_activity.sql";
+    public static final String REFRESH_DAILY_MACHINE_USAGE_FILE_NAME = "refresh_daily_machine_usage.sql";
+    public static final String CLICKHOUSE_EXPLAIN_MODE = "clickhouse.explainmode";
 
     static void helpWithInit(Client client, Properties props, String databaseName) throws DBException {
 
@@ -39,6 +40,29 @@ public final class InitHelper {
             InitHelper.refreshViews(client);
             try { Thread.sleep(10000); }
             catch(InterruptedException ex){ Thread.currentThread().interrupt();}
+        }
+    }
+
+    static String initExplainMode(Properties props) {
+        String explainMode = props.getProperty(CLICKHOUSE_EXPLAIN_MODE, "none");
+        switch(explainMode.toLowerCase()) {
+            case "none":
+                return "";
+            case "tree":
+                return "EXPLAIN QUERY TREE ";
+            case "ast":
+                return "EXPLAIN AST ";
+            case "syntax":
+                return "EXPLAIN SYNTAX ";
+            case "plan":
+                return "EXPLAIN PLAN ";
+            case "pipeline":
+                return "EXPLAIN PIPELINE ";
+            case "estimate":
+                return "EXPLAIN ESTIMATE ";
+            default:
+                System.err.println("Unknown explain mode: " + explainMode + ". Defaulting to 'none'.");
+                return "";
         }
     }
 
